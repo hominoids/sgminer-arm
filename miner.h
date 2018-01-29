@@ -1161,6 +1161,9 @@ extern bool opt_luffa_parallel;
 extern int opt_hamsi_expand_big;
 extern bool opt_hamsi_short;
 
+// Cryptonight options
+extern bool opt_cryptonight_monero;
+
 #if LOCK_TRACKING
 extern pthread_mutex_t lockstat_lock;
 #endif

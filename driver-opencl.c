@@ -1475,7 +1475,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
   }
   // if (algorithm.type == ALGO_ETHASH) read lock gpu->eth_dag.lock has to be released
   
-  if(gpu->algorithm.type == ALGO_CRYPTONIGHT) {
+  if(gpu->algorithm.type == ALGO_CRYPTONIGHT || gpu->algorithm.type == ALGO_CRYPTONIGHT_MONERO) {
     mutex_lock(&work->pool->XMRGlobalNonceLock);
     work->blk.nonce = work->pool->XMRGlobalNonce;
     work->pool->XMRGlobalNonce += gpu->max_hashes;
@@ -1485,7 +1485,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
   if (clState->goffset)
     p_global_work_offset = (size_t *)&work->blk.nonce;
   
-  if (gpu->algorithm.type == ALGO_CRYPTONIGHT) {
+  if (gpu->algorithm.type == ALGO_CRYPTONIGHT || gpu->algorithm.type == ALGO_CRYPTONIGHT_MONERO) {
     size_t GlobalThreads = *globalThreads, Nonce[2] = { (size_t)work->blk.nonce, 1}, gthreads[2] = { *globalThreads, 8 }, lthreads[2] = { *localThreads, 8 };
     size_t BranchBufCount[4] = { 0, 0, 0, 0 };
     

@@ -7,6 +7,21 @@
 #include "blake256.cl"
 #include "groestl256.cl"
 
+#define VARIANT1_1(p) \
+  do if (variant > 0) \
+  { \
+    uint tmp32 = (p).z; \
+    uint tmp = tmp32 >> 24; \
+    uint tmp1 = (tmp>>4)&1, tmp2 = (tmp>>5)&1, tmp3 = tmp1^tmp2; \
+    uint tmp0 = nonce_flag ? tmp3 : tmp1 + 1; \
+    tmp32 &= 0x00ffffff; tmp32 |= ((tmp & 0xef) | (tmp0<<4)) << 24; \
+    (p).z = tmp32; \
+  } while(0)
+
+#define VARIANT1_2(p) VARIANT1_1(p)
+#define VARIANT1_INIT() \
+  int variant = 1; \
+  const int nonce_flag = ((get_global_id(0) - get_global_offset(0))) & 1
 
 
 static const __constant ulong keccakf_rndc[24] = 
@@ -412,6 +427,8 @@ __kernel void search1(__global uint4 *Scratchpad, __global ulong *states)
 	ulong a[2], b[2];
 	__local uint AES0[256], AES1[256], AES2[256], AES3[256];
 	
+	VARIANT1_INIT();
+
 	Scratchpad += ((get_global_id(0) - get_global_offset(0)));
 	states += (25 * (get_global_id(0) - get_global_offset(0)));
 	
@@ -443,6 +460,7 @@ __kernel void search1(__global uint4 *Scratchpad, __global ulong *states)
 		//b_x ^= ((uint4 *)c)[0];
 		
 		Scratchpad[IDX((a[0] & 0x1FFFF0) >> 4)] = b_x ^ ((uint4 *)c)[0];
+		VARIANT1_1(Scratchpad[IDX((a[0] & 0x1FFFF0) >> 4)]);
 		
 		uint4 tmp;
 		tmp = Scratchpad[IDX((c[0] & 0x1FFFF0) >> 4)];
@@ -451,6 +469,7 @@ __kernel void search1(__global uint4 *Scratchpad, __global ulong *states)
 		a[0] += mul_hi(c[0], as_ulong2(tmp).s0);
 		
 		Scratchpad[IDX((c[0] & 0x1FFFF0) >> 4)] = ((uint4 *)a)[0];
+		VARIANT1_2(Scratchpad[IDX((c[0] & 0x1FFFF0) >> 4)]);
 		
 		((uint4 *)a)[0] ^= tmp;
 		
@@ -547,6 +566,8 @@ __kernel void cryptonight(__global ulong *input, __global uint4 *Scratchpad, __g
 	ulong inbuf[10], a[2], b[2];
 	uint4 text[8];
 	
+	VARIANT1_INIT();
+
 	for(int i = 0; i < 256; ++i)
 	{
 		const uint tmp = AES0_C[i];
@@ -607,6 +628,7 @@ __kernel void cryptonight(__global ulong *input, __global uint4 *Scratchpad, __g
 		b_x ^= ((uint4 *)c)[0];
 		
 		Scratchpad[(a[0] & 0x1FFFF0) >> 4] = b_x;
+		VARIANT1_1(Scratchpad[(a[0] & 0x1FFFF0) >> 4]);
 		
 		uint4 tmp;
 		tmp = Scratchpad[(c[0] & 0x1FFFF0) >> 4];
@@ -615,6 +637,7 @@ __kernel void cryptonight(__global ulong *input, __global uint4 *Scratchpad, __g
 		a[0] += mul_hi(c[0], as_ulong2(tmp).s0);
 		
 		Scratchpad[(c[0] & 0x1FFFF0) >> 4] = ((uint4 *)a)[0];
+		VARIANT1_2(Scratchpad[(c[0] & 0x1FFFF0) >> 4]);
 		
 		((uint4 *)a)[0] ^= tmp;
 		
