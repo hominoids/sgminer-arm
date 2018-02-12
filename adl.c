@@ -1065,6 +1065,7 @@ void change_autosettings(int gpu)
       gpus[gpu].cutofftemp = val;
   }
 }
+#endif
 
 void init_adl(int nDevs)
 {
@@ -1471,6 +1472,7 @@ void init_adl(int nDevs)
   gpu_stats = &adl_gpu_stats;
 }
 
+#ifdef HAVE_CURSES
 void change_gpusettings(int gpu)
 {
   struct gpu_adl *ga = &gpus[gpu].adl;
