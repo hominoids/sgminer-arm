@@ -425,8 +425,9 @@ static bool __set_engineclock(struct cgpu_info *cgpu, int iEngineClock)
   else
     info->engineclock = record->ulSclk / 100;
 
+  Tonga_State_Array *state_array = get_state_array(info->pptable);
   idx = MIN(idx + 1, sclk_tbl->ucNumEntries - 1);
-  get_state_array(info->pptable)->entries[1].ucEngineClockIndexHigh = idx;
+  state_array->entries[state_array->ucNumEntries - 1].ucEngineClockIndexHigh = idx;
   info->sclk_ind = idx;
 
   return (engineclock != info->engineclock);
@@ -485,7 +486,7 @@ static bool __set_memoryclock(struct cgpu_info *cgpu, int iMemoryClock)
   int memclock = info->memclock;
 
   Tonga_MCLK_Dependency_Table* mclk_tbl = get_mclk_table(info->pptable);
-  Tonga_MCLK_Dependency_Record *record = &mclk_tbl->entries[1];
+  Tonga_MCLK_Dependency_Record *record = &mclk_tbl->entries[mclk_tbl->ucNumEntries - 1];
   record->ulMclk = iMemoryClock * 100;
   info->memclock = iMemoryClock;
 
@@ -670,6 +671,7 @@ void sysfs_cleanup(int nDevs)
       lseek(info->fd_pptable, 0, SEEK_SET);
       write(info->fd_pptable, info->pptable, info->pptable_size);
       pthread_mutex_unlock(&info->rw_lock);
+      sync();
     }
   }
 #endif
