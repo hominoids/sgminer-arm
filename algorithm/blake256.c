@@ -54,7 +54,7 @@ be32enc_vect(uint32_t *dst, const uint32_t *src, uint32_t len)
 
 static const uint32_t diff1targ_blake256 = 0x000000ff;
 
-inline void blake256hash(void *state, const void *input)
+static inline void blake256hash(void *state, const void *input)
 {
   sph_blake256_context ctx_blake;
   sph_blake256_init(&ctx_blake);

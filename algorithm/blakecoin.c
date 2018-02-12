@@ -54,7 +54,7 @@ be32enc_vect(uint32_t *dst, const uint32_t *src, uint32_t len)
 
 static const uint32_t diff1targ_blake256 = 0x000000ff;
 
-inline void blakecoinhash(void *state, const void *input)
+void blakecoinhash(void *state, const void *input)
 {
   sph_blake256_context     ctx_blake;
   sph_blake256_init(&ctx_blake);

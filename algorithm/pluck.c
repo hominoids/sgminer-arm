@@ -331,7 +331,7 @@ void sha256_hash512(unsigned char *hash, const unsigned char *data)
 		be32enc((uint32_t *)hash + i, S[i]);
 }
 
-inline void pluckrehash(void *state, const void *input)
+static inline void pluckrehash(void *state, const void *input)
 {
 
 	int i,j;

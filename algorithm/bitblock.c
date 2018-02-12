@@ -106,10 +106,7 @@ be32enc_vect(uint32_t *dst, const uint32_t *src, uint32_t len)
 }
 
 
-#ifdef __APPLE_CC__
-static
-#endif
-inline void bitblockhash(void *state, const void *input)
+static inline void bitblockhash(void *state, const void *input)
 {
     init_Bhash_contexts();
 

@@ -37,7 +37,7 @@ static const uint32_t diff1targ = 0x0000ffff;
 
 
 
-inline void credits_hash(void *state, const void *input)
+static inline void credits_hash(void *state, const void *input)
 {
 	sph_sha256_context sha1, sha2;
 	uint32_t hash[8], hash2[8];

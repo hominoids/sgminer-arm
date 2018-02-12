@@ -54,7 +54,7 @@ be32enc_vect(uint32_t *dst, const uint32_t *src, uint32_t len)
 }
 
 
-inline void lyra2rev2hash(void *state, const void *input)
+static inline void lyra2rev2hash(void *state, const void *input)
 {
     sph_blake256_context     ctx_blake;
     sph_bmw256_context       ctx_bmw;
