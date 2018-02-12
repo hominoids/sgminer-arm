@@ -138,6 +138,11 @@ bool opt_hamsi_short = false;
 bool opt_blake_compact = false;
 bool opt_luffa_parallel = false;
 
+/*****************************************
+ * Cryptonight Algorithm options
+ *****************************************/
+bool opt_cryptonight_monero = true;
+
 struct list_head scan_devices;
 bool devices_enabled[MAX_DEVICES];
 int opt_devs_enabled;
@@ -1538,6 +1543,9 @@ struct opt_table opt_config_table[] = {
   OPT_WITHOUT_ARG("--hamsi-short",
       opt_set_bool, &opt_hamsi_short,
       "Set SPH_HAMSI_SHORT for X13 derived algorithms (Can give better hashrate for some GPUs)"),
+  OPT_WITHOUT_ARG("--cryptonight-monero",
+      opt_set_bool, &opt_cryptonight_monero,
+      "Use Monero Cryptonight variants as appropriate"),
   OPT_WITH_ARG("--keccak-unroll",
       set_int_0_to_9999, opt_show_intval, &opt_keccak_unroll,
       "Set SPH_KECCAK_UNROLL for Xn derived algorithms (Default: 0)"),

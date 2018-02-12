@@ -1366,7 +1366,7 @@ bool sock_keepalived(struct pool *pool, const char *rpc2_id, int work_id)
   json_error_t err;
   bool ret = false;
 
-  if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
+  if (pool->algorithm.type == ALGO_CRYPTONIGHT || pool->algorithm.type == ALGO_CRYPTONIGHT_MONERO) {
     s = malloc(300 + strlen(rpc2_id) + 10);
     snprintf(s, 128, "{\"method\": \"keepalived\", \"params\": {\"id\": \"%s\"}, \"id\":%d}", rpc2_id, work_id);
   } else {
@@ -2326,7 +2326,7 @@ bool parse_method(struct pool *pool, char *s)
   }
   
   //cryptonight uses the "job" method instead of mining.notify
-  if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
+  if (pool->algorithm.type == ALGO_CRYPTONIGHT || pool->algorithm.type == ALGO_CRYPTONIGHT_MONERO) {
     if (!strncasecmp(buf, "job", 3)) {
       if (parse_notify_cn(pool, params)) {
         pool->stratum_notify = ret = true;
@@ -2455,7 +2455,7 @@ bool auth_stratum(struct pool *pool)
   json_error_t err;
   bool ret = false;
 
-  if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
+  if (pool->algorithm.type == ALGO_CRYPTONIGHT || pool->algorithm.type == ALGO_CRYPTONIGHT_MONERO) {
     sprintf(s, "{\"method\": \"login\", \"params\": {\"login\": \"%s\", \"pass\": \"%s\", \"agent\": \"%s/%s\"}, \"id\": 1}",
       pool->rpc_user, pool->rpc_pass, PACKAGE, VERSION);
   
@@ -2507,7 +2507,7 @@ bool auth_stratum(struct pool *pool)
   }
   
   //check if the result contains an id... if so then we need to process as first job
-  if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
+  if (pool->algorithm.type == ALGO_CRYPTONIGHT || pool->algorithm.type == ALGO_CRYPTONIGHT_MONERO) {
     if ((res_id = json_object_get(res_val, "id"))) {
       cg_wlock(&pool->data_lock);
       strcpy(pool->XMRAuthID, json_string_value(res_id));
@@ -2980,7 +2980,7 @@ resend:
   }
   
   //Cryptonight doesn't subscribe...
-	if(pool->algorithm.type == ALGO_CRYPTONIGHT)
+	if(pool->algorithm.type == ALGO_CRYPTONIGHT || pool->algorithm.type == ALGO_CRYPTONIGHT_MONERO)
 	{
 		if (!pool->stratum_url) { 
       pool->stratum_url = pool->sockaddr_url;

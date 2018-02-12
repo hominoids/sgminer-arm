@@ -13,6 +13,24 @@
 #include "algorithm/cryptonight.h"
 #include "algorithm/cn-aes-tbls.h"
 
+#define VARIANT1_1(p) \
+  do if (Variant > 0) \
+  { \
+    uint8_t tmp = ((const uint8_t*)(p))[11]; \
+    uint8_t tmp1 = (tmp>>4)&1, tmp2 = (tmp>>5)&1, tmp3 = tmp1^tmp2; \
+    uint8_t tmp0 = nonce_flag ? tmp3 : tmp1 + 1; \
+    ((uint8_t*)(p))[11] = (tmp & 0xef) | (tmp0<<4); \
+  } while(0)
+
+#define VARIANT1_2(p) VARIANT1_1(p)
+#define VARIANT1_INIT() \
+  if (Variant > 0 && Length < 43) \
+  { \
+    fprintf(stderr, "Cryptonight variants need at least 43 bytes of data"); \
+    _exit(1); \
+  } \
+  const uint8_t nonce_flag = Variant > 0 ? ((const uint8_t*)Input)[39] & 0x01 : 0
+
 static const uint64_t keccakf_rndc[24] = 
 {
     0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808aULL,
@@ -184,12 +202,14 @@ void AESExpandKey256(uint32_t *keybuf)
 	}
 }
 
-void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length)
+void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length, int Variant)
 {
 	CryptonightCtx CNCtx;
 	uint64_t text[16], a[2], b[2];
 	uint32_t ExpandedKey1[64], ExpandedKey2[64];
 	
+	VARIANT1_INIT();
+
 	CNKeccak(CNCtx.State, Input, Length);
 	
 	for(int i = 0; i < 4; ++i) ((uint64_t *)ExpandedKey1)[i] = CNCtx.State[i];
@@ -226,6 +246,7 @@ void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length)
 		b[1] ^= c[1];
 		
 		memcpy(CNCtx.Scratchpad + ((a[0] & 0x1FFFF0) >> 3), b, 16);
+		VARIANT1_1(CNCtx.Scratchpad + ((a[0] & 0x1FFFF0) >> 3));
 		
 		memcpy(b, CNCtx.Scratchpad + ((c[0] & 0x1FFFF0) >> 3), 16);
 		
@@ -235,6 +256,7 @@ void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length)
 		a[0] += hi;
 		
 		memcpy(CNCtx.Scratchpad + ((c[0] & 0x1FFFF0) >> 3), a, 16);
+		VARIANT1_2(CNCtx.Scratchpad + ((c[0] & 0x1FFFF0) >> 3));
 		
 		a[0] ^= b[0];
 		a[1] ^= b[1];
@@ -301,13 +323,14 @@ void cryptonight_regenhash(struct work *work)
 {
 	uint32_t data[20];
 	uint32_t *nonce = (uint32_t *)(work->data + 39);
+	int variant = opt_cryptonight_monero && ((uint8_t *)work->data)[0] >= 7 ? ((uint8_t *)work->data)[0] - 6 : 0;
 	uint32_t *ohash = (uint32_t *)(work->hash);
 	
 	work->XMRNonce = *nonce;
 	
 	memcpy(data, work->data, work->XMRBlobLen);
 		
-	cryptonight(ohash, data, work->XMRBlobLen);
+	cryptonight(ohash, data, work->XMRBlobLen, variant);
 	
 	char *tmpdbg = bin2hex(ohash, 32);
 	
