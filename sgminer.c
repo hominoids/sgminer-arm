@@ -5494,7 +5494,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
         get_statline(logline, sizeof(logline), cgpu);
         if (!curses_active) {
-          printf("%s          \r", logline);
+          if (isatty(fileno((FILE *)stdout)))
+            printf("%s          \r", logline);
           fflush(stdout);
         } else
           applog(LOG_INFO, "%s", logline);
