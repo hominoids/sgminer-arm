@@ -1060,7 +1060,7 @@ out:
     }
   }
   
-  if (algorithm->type == ALGO_CRYPTONIGHT || algorithm->type == ALGO_CRYPTONIGHT_MONERO) {
+  if (algorithm->type == ALGO_CRYPTONIGHT) {
     size_t GlobalThreads;
     readbufsize = 128UL;
 
