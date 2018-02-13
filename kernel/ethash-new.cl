@@ -1,4 +1,37 @@
-//#define LEGACY
+#if (defined(__Tahiti__) || defined(__Pitcairn__) || defined(__Capeverde__) || defined(__Oland__) || defined(__Hainan__))
+
+#define LEGACY
+
+#endif
+
+
+#if defined(__GCNMINC__)
+
+uint2 amd_bitalign(uint2 src0, uint2 src1, uint2 src2)
+{
+    uint2 dst;
+    __asm("v_alignbit_b32 %0, %2, %3, %4\n"
+          "v_alignbit_b32 %1, %5, %6, %7"
+          : "=v" (dst.x), "=v" (dst.y)
+          : "v" (src0.x), "v" (src1.x), "v" (src2.x),
+		    "v" (src0.y), "v" (src1.y), "v" (src2.y));
+    return dst;
+}
+
+#elif defined(cl_amd_media_ops)
+
+#pragma OPENCL EXTENSION cl_amd_media_ops : enable
+
+#elif defined(cl_nv_pragma_unroll)
+
+#define NVIDIA
+
+#else
+
+#define UNKNOWN
+
+#endif
+
 
 #if WORKSIZE % 4 != 0
 #error "WORKSIZE has to be a multiple of 4"
@@ -36,21 +69,38 @@ static __constant uint2 const Keccak_f1600_RC[24] = {
     (uint2)(0x80008008, 0x80000000),
 };
 
-#ifdef cl_amd_media_ops
 
 #ifdef LEGACY
 #define barrier(x) mem_fence(x)
-#elif WORKSIZE <= 64
+#elif defined(cl_amd_media_ops) && WORKSIZE <= 64
 #error "WORKSIZE <= 64 isn't supported by newer AMD drivers and WORKSIZE > 64 is required"
 #endif
 
-#define ROTL64_1(x, y) amd_bitalign((x), (x).s10, 32 - (y))
-#define ROTL64_2(x, y) amd_bitalign((x).s10, (x), 32 - (y))
 
-#else
+#ifdef UNKNOWN
 
 #define ROTL64_1(x, y) as_uint2(rotate(as_ulong(x), (ulong)(y)))
 #define ROTL64_2(x, y) ROTL64_1(x, (y) + 32)
+
+#elif defined(NVIDIA)
+
+uint2 ROTL64_1(uint2 x, int y) {
+    uint2 result;
+    asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(x.y), "r"(x.x), "r"(y));
+    asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(x.x), "r"(x.y), "r"(y));
+    return result;
+}
+uint2 ROTL64_2(uint2 x, int y) {
+    uint2 result;
+    asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(x.x), "r"(x.y), "r"(y + 32));
+    asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(x.y), "r"(x.x), "r"(y + 32));
+    return result;
+}
+
+#else
+
+#define ROTL64_1(x, y) amd_bitalign((x), (x).s10, 32 - (y))
+#define ROTL64_2(x, y) amd_bitalign((x).s10, (x), 32 - (y))
 
 #endif
 
@@ -136,9 +186,8 @@ static __constant uint2 const Keccak_f1600_RC[24] = {
 
 
 #define KECCAK_PROCESS(st, in_size, out_size, isolate)    do { \
-    for (int r = 0;r < (23);) { \
-        if (isolate) \
-            KECCAKF_1600_RND(st, r++, 25); \
+    for (int r = 0; r < (23 + !(isolate)); r++) { \
+        KECCAKF_1600_RND(st, r, 25); \
     } \
     KECCAKF_1600_RND(st, 23, out_size); \
 } while(0)
@@ -177,7 +226,7 @@ typedef union {
 do { \
     if (get_local_id(0) == lane_idx) \
         buffer[hash_id] = fnv(init0 ^ (a + x), mix.s##x) % DAG_SIZE; \
-    barrier(CLK_LOCAL_MEM_FENCE); \
+    mem_fence(CLK_LOCAL_MEM_FENCE); \
     mix = fnv(mix, g_dag[buffer[hash_id]].uint8s[thread_id]); \
 } while(0)
 
@@ -250,6 +299,8 @@ __kernel void search(
     
         init0 = share->uints[0];
 
+        barrier(CLK_LOCAL_MEM_FENCE);
+
 #ifdef LEGACY
         for (uint a = 0; a < (ACCESSES & isolate); a += 8) {
 #else
@@ -266,6 +317,8 @@ __kernel void search(
             MIX(6);
             MIX(7);
         }
+
+        barrier(CLK_LOCAL_MEM_FENCE);
         
         share->uint2s[thread_id] = (uint2)(fnv_reduce(mix.lo), fnv_reduce(mix.hi));
         

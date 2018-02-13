@@ -124,8 +124,8 @@ static __constant uint2 const Keccak_f1600_RC[24] = {
 } while(0)
 
 #define KECCAK_PROCESS(st, in_size, out_size, isolate)	do { \
-		for (int r = 0;r < (23);) { \
-			if (isolate) { KECCAKF_1600_RND(((uint2 *)st), r++, 25); } \
+		for (int r = 0; r < (23 + !(isolate)); r++) { \
+			KECCAKF_1600_RND(((uint2 *)st), r, 25); \
 		} \
 		KECCAKF_1600_RND(((uint2 *)st), 23, out_size); \
 } while(0)
