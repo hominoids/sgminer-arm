@@ -427,6 +427,7 @@ char *set_gpu_powertune(char *arg)
   gpus[device++].gpu_powertune = val;
 
   while ((nextptr = strtok(NULL, ",")) != NULL) {
+    nextptr[-1] = ',';
     val = atoi(nextptr);
     if (val < -99 || val > 499)
       return "Invalid value passed to set_gpu_powertune";
@@ -1619,7 +1620,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 //  submit_work_async(work);
     memset(thrdata->res, 0, buffersize);
     /* This finish flushes the writebuffer set with CL_FALSE in clEnqueueWriteBuffer */
-    clFinish(clState->commandQueue);
+//  clFinish(clState->commandQueue);
   }
 
   return hashes;

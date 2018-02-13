@@ -364,7 +364,7 @@ static void set_current_pool(struct pool *pool) {
         clReleaseMemObject(cache->dags[i]->dag_buffer);
       cache->dags[i]->dag_buffer = NULL;
       cache->dags[i]->pool = NULL;
-      cache->dags[i]->max_epoch = 0;
+      cache->dags[i]->max_epoch = UINT32_MAX;
       cache->dags[i]->current_epoch = UINT32_MAX;
       cg_wunlock(&cache->dags[i]->lock);
     }
@@ -606,6 +606,7 @@ struct pool *add_pool(void)
   pool->intensity = strdup(buf);
   pool->xintensity = strdup(buf);
   pool->rawintensity = strdup(buf);
+  pool->eth_cache.current_epoch = UINT32_MAX;
 
   pools = (struct pool **)realloc(pools, sizeof(struct pool *) * (total_pools + 2));
   pools[total_pools++] = pool;
@@ -2379,8 +2380,10 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 
   if (pool->algorithm.type == ALGO_EQUIHASH) {
     pool->n2size = 8;
-    if (!set_coinbasetxn(pool, height, coinbasevalue, coinbasefrvalue, coinbasefrscript))
+    if (!set_coinbasetxn(pool, height, coinbasevalue, coinbasefrvalue, coinbasefrscript)) {
+      cg_wunlock(&pool->gbt_lock);
       return false;
+    }
   }
   else {
     free(pool->coinbasetxn);
@@ -2610,7 +2613,7 @@ static bool work_decode_eth(struct pool *pool, struct work *work, json_t *val, j
 	*/
 
   cg_ilock(&pool->data_lock);
-  if (memcmp(pool->eth_cache.seed_hash, SeedHash, 32)) {
+  if (pool->eth_cache.current_epoch == UINT32_MAX || memcmp(pool->eth_cache.seed_hash, SeedHash, 32)) {
     cg_ulock(&pool->data_lock);
     pool->eth_cache.current_epoch = EthCalcEpochNumber(SeedHash);
     memcpy(pool->eth_cache.seed_hash, SeedHash, 32);
@@ -3331,22 +3334,20 @@ static bool submit_upstream_work(struct work *work, CURL *curl, char *curl_err_s
 
   cgpu = get_thr_cgpu(thr_id);
 
-  if(work->pool->algorithm.type == ALGO_ETHASH)
-  {
-	  s = (char *)malloc(sizeof(char) * (128 + 16 + 512));
-	  uint64_t tmp = bswap_64(work->Nonce);
-	  char *ASCIIMixHash = bin2hex(work->mixhash, 32);
-	  char *ASCIIPoWHash = bin2hex(work->data, 32);
-	  char *ASCIINonce = bin2hex(&tmp, 8);
+  if(work->pool->algorithm.type == ALGO_ETHASH) {
+    s = (char *)malloc(sizeof(char) * (128 + 16 + 512));
+    uint64_t tmp = bswap_64(work->Nonce);
+    char *ASCIIMixHash = bin2hex(work->mixhash, 32);
+    char *ASCIIPoWHash = bin2hex(work->data, 32);
+    char *ASCIINonce = bin2hex((uint8_t*) &tmp, 8);
 
-	  snprintf(s, 128 + 16 + 512, "{\"jsonrpc\":\"2.0\", \"method\":\"eth_submitWork\", \"params\":[\"0x%s\", \"0x%s\", \"0x%s\"],\"id\":1}", ASCIINonce, ASCIIPoWHash, ASCIIMixHash);
+    snprintf(s, 128 + 16 + 512, "{\"jsonrpc\":\"2.0\", \"method\":\"eth_submitWork\", \"params\":[\"0x%s\", \"0x%s\", \"0x%s\"],\"id\":1}", ASCIINonce, ASCIIPoWHash, ASCIIMixHash);
 
-	  free(ASCIINonce);
-	  free(ASCIIMixHash);
-	  free(ASCIIPoWHash);
+    free(ASCIINonce);
+    free(ASCIIMixHash);
+    free(ASCIIPoWHash);
   }
-  else if(work->pool->algorithm.type == ALGO_EQUIHASH)
-  {
+  else if(work->pool->algorithm.type == ALGO_EQUIHASH) {
     /* equihash block: header (108) + nonce (32) + numbersolutions (3) + solution (1344) - total of 1487 , times 2 for hex string (2974) + json string (50) */
     const int bin_len = sizeof(work->equihash_data);
     char *result = bin2hex(work->equihash_data, bin_len);  // block header
@@ -3376,61 +3377,65 @@ static bool submit_upstream_work(struct work *work, CURL *curl, char *curl_err_s
     free(txn_cnt);
     applog(LOG_DEBUG, "submitblock: %s", s);
   }
-  else
-  {
-	  if (work->pool->algorithm.type == ALGO_CRE) {
-		endian_flip168(work->data, work->data);
-	  } else {
-		endian_flip128(work->data, work->data);
-	  }
+  else {
+    if (work->pool->algorithm.type == ALGO_CRE)
+      endian_flip168(work->data, work->data);
+    else
+      endian_flip128(work->data, work->data);
 
-	  /* build hex string - Make sure to restrict to 80 bytes for Neoscrypt */
-	  int datasize = 128;
-	  if (work->pool->algorithm.type == ALGO_NEOSCRYPT) datasize = 80;
-	  else if (work->pool->algorithm.type == ALGO_CRE) datasize = 168;
-	  hexstr = bin2hex(work->data, datasize);
+    /* build hex string - Make sure to restrict to 80 bytes for Neoscrypt */
+    int datasize = 128;
+    if (work->pool->algorithm.type == ALGO_NEOSCRYPT)
+      datasize = 80;
+    else if (work->pool->algorithm.type == ALGO_CRE)
+      datasize = 168;
+    hexstr = bin2hex(work->data, datasize);
 
-	  /* build JSON-RPC request */
-	  if (work->gbt) {
-		char *gbt_block, *varint;
-		unsigned char data[80];
+    /* build JSON-RPC request */
+    if (work->gbt) {
+      char *gbt_block, *varint;
+      unsigned char data[80];
 
-		flip80(data, work->data);
-		gbt_block = bin2hex(data, 80);
+      flip80(data, work->data);
+      gbt_block = bin2hex(data, 80);
 
-		if (work->gbt_txns < 0xfd) {
-		  uint8_t val = work->gbt_txns;
+      if (work->gbt_txns < 0xfd) {
+        uint8_t val = work->gbt_txns;
 
-		  varint = bin2hex((const unsigned char *)&val, 1);
-		} else if (work->gbt_txns <= 0xffff) {
-		  uint16_t val = htole16(work->gbt_txns);
+        varint = bin2hex((const unsigned char *)&val, 1);
+      }
+      else if (work->gbt_txns <= 0xffff) {
+        uint16_t val = htole16(work->gbt_txns);
 
-		  gbt_block = (char *)realloc_strcat(gbt_block, "fd");
-		  varint = bin2hex((const unsigned char *)&val, 2);
-		} else {
-		  uint32_t val = htole32(work->gbt_txns);
+        gbt_block = (char *)realloc_strcat(gbt_block, "fd");
+        varint = bin2hex((const unsigned char *)&val, 2);
+      }
+      else {
+        uint32_t val = htole32(work->gbt_txns);
 
-		  gbt_block = (char *)realloc_strcat(gbt_block, "fe");
-		  varint = bin2hex((const unsigned char *)&val, 4);
-		}
-		gbt_block = (char *)realloc_strcat(gbt_block, varint);
-		free(varint);
-		gbt_block = (char *)realloc_strcat(gbt_block, work->coinbase);
+        gbt_block = (char *)realloc_strcat(gbt_block, "fe");
+        varint = bin2hex((const unsigned char *)&val, 4);
+      }
+      gbt_block = (char *)realloc_strcat(gbt_block, varint);
+      free(varint);
+      gbt_block = (char *)realloc_strcat(gbt_block, work->coinbase);
 
-		s = strdup("{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"");
-		s = (char *)realloc_strcat(s, gbt_block);
-		if (work->job_id) {
-		  s = (char *)realloc_strcat(s, "\", {\"workid\": \"");
-		  s = (char *)realloc_strcat(s, work->job_id);
-		  s = (char *)realloc_strcat(s, "\"}]}");
-		} else
-		  s = (char *)realloc_strcat(s, "\", {}]}");
-		free(gbt_block);
-	  } else {
-		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
-		s = (char *)realloc_strcat(s, hexstr);
-		s = (char *)realloc_strcat(s, "\" ], \"id\":1}");
-	  }
+      s = strdup("{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"");
+      s = (char *)realloc_strcat(s, gbt_block);
+      if (work->job_id) {
+        s = (char *)realloc_strcat(s, "\", {\"workid\": \"");
+        s = (char *)realloc_strcat(s, work->job_id);
+        s = (char *)realloc_strcat(s, "\"}]}");
+      }
+      else
+        s = (char *)realloc_strcat(s, "\", {}]}");
+      free(gbt_block);
+    }
+    else {
+      s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
+      s = (char *)realloc_strcat(s, hexstr);
+      s = (char *)realloc_strcat(s, "\" ], \"id\":1}");
+    }
   }
   applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
   s = (char *)realloc_strcat(s, "\n");
@@ -5519,7 +5524,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
   struct timeval runtime;
   timersub(&total_tv_end, &launch_time, &runtime);
   double runtime_secs = runtime.tv_sec + 1e-6 * runtime.tv_usec;
-  applog(LOG_DEBUG, "total hashes: %.0f, total runtime / s: %.3f", 1e6 * total_mhashes_done, runtime_secs);
+  applog(LOG_DEBUG, "total hashes: %g, total runtime / s: %g", 1e6 * total_mhashes_done, runtime_secs);
 
   local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
   decay_time(&total_rolling, local_mhashes_done / local_secs, local_secs);
@@ -5547,7 +5552,8 @@ out_unlock:
 
   if (showlog) {
     if (!curses_active) {
-      printf("%s          \r", statusline);
+      if (isatty(fileno((FILE *)stdout)))
+        printf("%s          \r", statusline);
       fflush(stdout);
     } else
       applog(LOG_INFO, "%s", statusline);
@@ -5657,9 +5663,7 @@ static bool parse_stratum_response(struct pool *pool, char *s)
       }
 
       json_t *status = json_object_get(res_val, "status");
-      const char *s = json_string_value(status);
-
-      if (json_is_null(err_val) && status && !strcmp(s, "OK")) {
+      if (json_is_null(err_val) && status != NULL && !strcmp(json_string_value(status), "OK")) {
         success = true;
       }
       else {
@@ -6037,7 +6041,7 @@ static void *stratum_sthread(void *userdata)
       uint64_t tmp = bswap_64(work->Nonce);
       char *ASCIIMixHash = bin2hex(work->mixhash, 32);
       char *ASCIIPoWHash = bin2hex(work->data, 32);
-      char *ASCIINonce = bin2hex(&tmp, 8);
+      char *ASCIINonce = bin2hex((uint8_t*) &tmp, 8);
 
       mutex_lock(&sshare_lock);
       /* Give the stratum share a unique id */
@@ -6059,7 +6063,7 @@ static void *stratum_sthread(void *userdata)
 
       applog(LOG_DEBUG, "stratum_sthread() algorithm = %s", pool->algorithm.name);
 		
-      char *ASCIINonce = bin2hex(&work->XMRNonce, 4);
+      char *ASCIINonce = bin2hex((uint8_t*) &work->XMRNonce, 4);
       
       ASCIIResult = bin2hex(work->hash, 32);
        
@@ -8088,9 +8092,8 @@ retry_pool:
      * and any number of issues could have come up in the meantime
      * so always establish a fresh connection instead of relying on
      * a persistent one. */
-    //if (pool->algorithm.type != ALGO_EQUIHASH)
-    //  curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
-    //curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 1);
+    if (pool->algorithm.type != ALGO_EQUIHASH)
+      curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
     val = json_rpc_call(curl, curl_err_str, lp_url, pool->rpc_userpass,
             lpreq, false, true, &rolltime, pool, false);
 
@@ -8114,8 +8117,9 @@ retry_pool:
       cgtime(&end);
       if (end.tv_sec - start.tv_sec > 30)
         continue;
-      if (failures == 1)
+      if (failures++ == 1)
         applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
+      pool_died(pool);
       cgsleep_ms(30000);
     }
 
@@ -8436,12 +8440,9 @@ static void *watchdog_thread(void __maybe_unused *userdata)
            (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
         /* Attempt to restart a GPU that's sick or dead once every minute */
         cgtime(&thr->sick);
-#ifdef HAVE_ADL
-        if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
+        if (gpu_activity(gpu) > 50) {
           /* Again do not attempt to restart a device that may have hard hung */
-        } else
-#endif
-        if (opt_restart)
+        } else if (opt_restart)
           reinit_device(cgpu);
       }
     }
@@ -8999,7 +9000,7 @@ bool add_cgpu(struct cgpu_info *cgpu)
   devices[total_devices++] = cgpu;
   wr_unlock(&devices_lock);
 
-  cgpu->eth_dag.current_epoch = 0xffffffffU;
+  cgpu->eth_dag.current_epoch = UINT32_MAX;
   cglock_init(&cgpu->eth_dag.lock);
 
   adjust_mostdevs();

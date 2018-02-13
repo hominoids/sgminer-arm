@@ -1969,7 +1969,7 @@ out:
 
 bool parse_notify_cn(struct pool *pool, json_t *val)
 {
-  char *job_id = NULL;
+  const char *job_id = NULL;
   bool clean;
   uint32_t XMRTarget;
   uint8_t XMRBlob[128];
@@ -1990,8 +1990,7 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
   jid = json_object_get(val, "job_id");
   target = json_object_get(val, "target");
 
-  if(!blob || !jid || !target)
-  {
+  if (blob == NULL || jid == NULL || target == NULL) {
     applog(LOG_DEBUG, "parse_notify_cn: bad params.");
     ret = false;
     goto out;
@@ -1999,11 +1998,10 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
 
   const char *blobval = json_string_value(blob);
   
-  if(strlen(blobval) > 254)
-  {
-	  applog(LOG_ERR, "Got a massive blob from pool.");
-	  ret = false;
-	  goto out;
+  if (strlen(blobval) > 254) {
+    applog(LOG_ERR, "Got a massive blob from pool.");
+    ret = false;
+    goto out;
   }
 	  
   if (!hex2bin(XMRBlob, blobval, strlen(blobval) / 2)) {
@@ -2012,7 +2010,7 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
   }
   
   job_id = json_string_value(jid);
-  hex2bin(&XMRTarget, json_string_value(target), 4);
+  hex2bin((uint8_t*) &XMRTarget, json_string_value(target), 4);
 
   cg_wlock(&pool->data_lock);
   

@@ -26,8 +26,7 @@
 #define VARIANT1_INIT() \
   if (Variant > 0 && Length < 43) \
   { \
-    fprintf(stderr, "Cryptonight variants need at least 43 bytes of data"); \
-    _exit(1); \
+    quit(1, "Cryptonight variants need at least 43 bytes of data"); \
   } \
   const uint8_t nonce_flag = Variant > 0 ? ((const uint8_t*)Input)[39] & 0x01 : 0
 
@@ -332,7 +331,7 @@ void cryptonight_regenhash(struct work *work)
 		
 	cryptonight(ohash, data, work->XMRBlobLen, variant);
 	
-	char *tmpdbg = bin2hex(ohash, 32);
+	char *tmpdbg = bin2hex((uint8_t*) ohash, 32);
 	
 	applog(LOG_DEBUG, "cryptonight_regenhash: %s\n", tmpdbg);
 	

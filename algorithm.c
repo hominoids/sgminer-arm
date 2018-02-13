@@ -975,47 +975,49 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
   cl_ulong le_target;
   cl_uint HighNonce, Isolate = UINT32_MAX;
 
+  dag = &blk->work->thr->cgpu->eth_dag;
+  cg_ilock(&dag->lock);
   cg_ilock(&pool->data_lock);
   if (pool->eth_cache.disabled || pool->eth_cache.dag_cache == NULL) {
     cg_iunlock(&pool->data_lock);
+    cg_iunlock(&dag->lock);
     cgsleep_ms(200);
-    applog(LOG_DEBUG, "THR[%d]: stop ETHASH mining", blk->work->thr_id);
+    applog(LOG_DEBUG, "THR[%d]: stop ETHASH mining (%d, %p)", blk->work->thr_id, pool->eth_cache.disabled, pool->eth_cache.dag_cache);
     return 1;
   }
-  dag = &blk->work->thr->cgpu->eth_dag;
-  cg_ilock(&dag->lock);
   if (dag->current_epoch != blk->work->eth_epoch) {
+    applog(LOG_NOTICE, "GPU%d: begin DAG creation...", blk->work->thr->cgpu->device_id);
     cl_ulong CacheSize = EthGetCacheSize(blk->work->eth_epoch);
     cg_ulock(&dag->lock);
-    if (dag->dag_buffer == NULL || blk->work->eth_epoch > dag->max_epoch) {
+    if (dag->dag_buffer == NULL || blk->work->eth_epoch >= dag->max_epoch + 1U) {
       if (dag->dag_buffer != NULL) {
-	cg_dlock(&pool->data_lock);
+        cg_dlock(&pool->data_lock);
         clReleaseMemObject(dag->dag_buffer);
       }
       else {
-	cg_ulock(&pool->data_lock);
-	int size = ++pool->eth_cache.nDevs;
-	pool->eth_cache.dags = (eth_dag_t **) realloc(pool->eth_cache.dags, sizeof(void*) * size);
-	pool->eth_cache.dags[size-1] = dag;
-	dag->pool = pool;
-	cg_dwlock(&pool->data_lock);
+        cg_ulock(&pool->data_lock);
+        int size = ++pool->eth_cache.nDevs;
+        pool->eth_cache.dags = (eth_dag_t **) realloc(pool->eth_cache.dags, sizeof(void*) * size);
+        pool->eth_cache.dags[size-1] = dag;
+        dag->pool = pool;
+        cg_dwlock(&pool->data_lock);
       }
       dag->max_epoch = blk->work->eth_epoch + eth_future_epochs;
-      dag->dag_buffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, EthGetDAGSize(dag->max_epoch), NULL, &status);
+      dag->dag_buffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS, EthGetDAGSize(dag->max_epoch), NULL, &status);
       if (status != CL_SUCCESS) {
-	cg_runlock(&pool->data_lock);
-	dag->max_epoch = 0;
-	dag->dag_buffer = NULL;
-	cg_wunlock(&dag->lock);
-	applog(LOG_ERR, "Error %d: Creating the DAG buffer failed.", status);
-	return status;
+        cg_runlock(&pool->data_lock);
+        dag->max_epoch = 0;
+        dag->dag_buffer = NULL;
+        cg_wunlock(&dag->lock);
+        applog(LOG_ERR, "Error %d: Creating the DAG buffer failed.", status);
+        return status;
       }
     }
     else
       cg_dlock(&pool->data_lock);
 
     applog(LOG_DEBUG, "DAG being regenerated.");
-    cl_mem eth_cache = clCreateBuffer(clState->context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, CacheSize, pool->eth_cache.dag_cache, &status);
+    cl_mem eth_cache = clCreateBuffer(clState->context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR | CL_MEM_HOST_WRITE_ONLY, CacheSize, pool->eth_cache.dag_cache, &status);
     cg_runlock(&pool->data_lock);
     if (status != CL_SUCCESS) {
       clReleaseMemObject(eth_cache);
@@ -1038,6 +1040,7 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 
     cl_ulong DAGSize = EthGetDAGSize(blk->work->eth_epoch);
     size_t DAGItems = (size_t) (DAGSize / 64);
+    cgsleep_ms(128 * blk->work->thr->cgpu->device_id); 
     status |= clEnqueueNDRangeKernel(clState->commandQueue, clState->GenerateDAG, 1, NULL, &DAGItems, NULL, 0, NULL, NULL);
     clFinish(clState->commandQueue);
 
@@ -1049,6 +1052,7 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
     }
     dag->current_epoch = blk->work->eth_epoch;
     cg_dwlock(&dag->lock);
+    applog(LOG_NOTICE, "GPU%d: new DAG created", blk->work->thr->cgpu->device_id);
   }
   else {
     cg_dlock(&dag->lock);
@@ -1069,7 +1073,7 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
   cl_uint ItemsArg = DAGSize / 128;
 
   // DO NOT flip80.
-  status |= clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 32, blk->work->data, 0, NULL, NULL);
+  status |= clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, CL_FALSE, 0, 32, blk->work->data, 0, NULL, NULL);
   
   CL_SET_ARG(clState->outputBuffer);
   CL_SET_ARG(clState->CLbuffer0);
