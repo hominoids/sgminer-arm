@@ -2003,7 +2003,7 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
     ret = false;
     goto out;
   }
-	  
+  
   if (!hex2bin(XMRBlob, blobval, strlen(blobval) / 2)) {
     ret = false;
     goto out;

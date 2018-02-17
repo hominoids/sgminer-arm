@@ -2542,7 +2542,7 @@ out:
 
 
 bool parse_diff_ethash(char* Target, const char* TgtStr);
-static bool work_decode_eth(struct pool *pool, struct work *work, json_t *val, json_t *ethval2)
+static bool work_decode_eth(struct pool *pool, struct work *work, json_t *val)
 {
   int i;
   bool ret = false;
@@ -2572,45 +2572,6 @@ static bool work_decode_eth(struct pool *pool, struct work *work, json_t *val, j
 
   if (!parse_diff_ethash(Target, TgtStr))
     goto out;
-
-	/*
-	BlockHeightStr = json_string_value(json_object_get(res2_obj, "number"));
-
-	if(!BlockHeightStr) return(false);
-
-	for(i = 0; BlockHeightStr[i]; ++i)
-	{
-		if(i == 1) continue;
-		if(!isxdigit(BlockHeightStr[i])) return(false);
-
-	}
-
-	NetDiffStr = json_string_value(json_object_get(res2_obj, "difficulty"));
-
-	if(!NetDiffStr) return(false);
-
-	for(i = 0; NetDiffStr[i]; ++i)
-	{
-		if(i == 1) continue;
-		if(!isxdigit(NetDiffStr[i])) return(false);
-
-	}
-
-	if(NetDiffStr[1] == 'x') work->network_diff = strtoull(NetDiffStr + 2, NULL);
-
-	if(strlen(NetDiffStr) != 66)
-	{
-		char NewNetDiffStr[65];
-		uint32_t PadLen = 66 - strlen(NetDiffStr);
-
-		memset(NewNetDiffStr, '0', PadLen);
-		memcpy(NewNetDiffStr + PadLen, NetDiffStr + 2, strlen(NetDiffStr) - 2);
-		NewNetDiffStr[64] = 0x00;
-
-		if(!hex2bin(FinalNetDiffStr, NewNetDiffStr, 32UL)) return(false);
-	}
-	else if(!hex2bin(FinalNetDiffStr, NetDiffStr + 2, 32UL)) return(false);
-	*/
 
   cg_ilock(&pool->data_lock);
   if (pool->eth_cache.current_epoch == UINT32_MAX || memcmp(pool->eth_cache.seed_hash, SeedHash, 32)) {
@@ -3553,7 +3514,7 @@ static bool get_upstream_work(struct work *work, CURL *curl, char *curl_err_str)
   struct pool *pool = work->pool;
   struct sgminer_pool_stats *pool_stats = &(pool->sgminer_pool_stats);
   struct timeval tv_elapsed;
-  json_t *val = NULL, *ethval2 = NULL;
+  json_t *val = NULL;
   bool rc = false;
   char *url;
 
@@ -3563,26 +3524,19 @@ static bool get_upstream_work(struct work *work, CURL *curl, char *curl_err_str)
 
   cgtime(&work->tv_getwork);
 
-  if(pool->algorithm.type == ALGO_ETHASH)
-  {
-	  pool->rpc_req = eth_getwork_rpc;
+  if(pool->algorithm.type == ALGO_ETHASH) {
+    pool->rpc_req = eth_getwork_rpc;
 
-	  val = json_rpc_call(curl, curl_err_str, url, pool->rpc_userpass,
+    val = json_rpc_call(curl, curl_err_str, url, pool->rpc_userpass,
           pool->rpc_req, false, false, &work->rolltime, pool, false);
-
-	  //ethval2 = json_rpc_call(curl, curl_err_str, pool->rpc_url, pool->rpc_userpass,
-      //    eth_gethighestblock_rpc, false, false, &work->rolltime, pool, false);
-
   }
-  else
-  {
-	  val = json_rpc_call(curl, curl_err_str, url, pool->rpc_userpass, pool->rpc_req, false,
+  else {
+    val = json_rpc_call(curl, curl_err_str, url, pool->rpc_userpass, pool->rpc_req, false,
           false, &work->rolltime, pool, false);
   }
 
-  // WARNING: if ethval2 is NULL, it'll slip in here.
   if (likely(val)) {
-    rc = (pool->algorithm.type == ALGO_ETHASH) ? work_decode_eth(pool, work, val, ethval2) : work_decode(pool, work, val);
+    rc = (pool->algorithm.type == ALGO_ETHASH) ? work_decode_eth(pool, work, val) : work_decode(pool, work, val);
     if (unlikely(!rc))
       applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
   } else
@@ -6062,11 +6016,11 @@ static void *stratum_sthread(void *userdata)
       sshare->work = work;
 
       applog(LOG_DEBUG, "stratum_sthread() algorithm = %s", pool->algorithm.name);
-		
+
       char *ASCIINonce = bin2hex((uint8_t*) &work->XMRNonce, 4);
       
       ASCIIResult = bin2hex(work->hash, 32);
-       
+      
       mutex_lock(&sshare_lock);
       /* Give the stratum share a unique id */
       sshare->id = swork_id++;
@@ -6242,7 +6196,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 {
   struct timeval tv_getwork, tv_getwork_reply;
   bool ret = false;
-  json_t *val, *ethval2;
+  json_t *val;
   CURL *curl;
   char curl_err_str[CURL_ERROR_SIZE];
   int rolltime = 0;
@@ -6341,36 +6295,30 @@ retry_stratum:
 
   cgtime(&tv_getwork);
 
-  if(pool->algorithm.type == ALGO_ETHASH)
-  {
-	  pool->rpc_req = eth_getwork_rpc;
+  if(pool->algorithm.type == ALGO_ETHASH) {
+    pool->rpc_req = eth_getwork_rpc;
 
-	  val = json_rpc_call(curl, curl_err_str, pool->rpc_url, pool->rpc_userpass,
+    val = json_rpc_call(curl, curl_err_str, pool->rpc_url, pool->rpc_userpass,
           pool->rpc_req, true, false, &rolltime, pool, false);
 
-	  cgtime(&tv_getwork_reply);
-
-	  //ethval2 = json_rpc_call(curl, curl_err_str, pool->rpc_url, pool->rpc_userpass,
-      //    eth_gethighestblock_rpc, true, false, &rolltime, pool, false);
-
+    cgtime(&tv_getwork_reply);
   }
-  else
-  {
-	  val = json_rpc_call(curl, curl_err_str, pool->rpc_url, pool->rpc_userpass,
-			  pool->rpc_req, true, false, &rolltime, pool, false);
-	  cgtime(&tv_getwork_reply);
+  else {
+    val = json_rpc_call(curl, curl_err_str, pool->rpc_url, pool->rpc_userpass,
+          pool->rpc_req, true, false, &rolltime, pool, false);
+    cgtime(&tv_getwork_reply);
 
-	  /* Detect if a http getwork pool has an X-Stratum header at startup,
-	   * and if so, switch to that in preference to getwork if it works */
-	  if (pool->stratum_url && !opt_fix_protocol && stratum_works(pool)) {
-		applog(LOG_NOTICE, "Switching %s to %s", get_pool_name(pool), pool->stratum_url);
-		if (!pool->rpc_url)
-		  pool->rpc_url = strdup(pool->stratum_url);
-		pool->has_stratum = true;
-		curl_easy_cleanup(curl);
+    /* Detect if a http getwork pool has an X-Stratum header at startup,
+     * and if so, switch to that in preference to getwork if it works */
+    if (pool->stratum_url && !opt_fix_protocol && stratum_works(pool)) {
+      applog(LOG_NOTICE, "Switching %s to %s", get_pool_name(pool), pool->stratum_url);
+      if (!pool->rpc_url)
+        pool->rpc_url = strdup(pool->stratum_url);
+      pool->has_stratum = true;
+      curl_easy_cleanup(curl);
 
-		goto retry_stratum;
-	  }
+      goto retry_stratum;
+    }
   }
 
   /* json_rpc_call() above succeeded */
@@ -6379,7 +6327,7 @@ retry_stratum:
     bool rc;
 
     if(pool->algorithm.type == ALGO_ETHASH)
-      rc = work_decode_eth(pool, work, val, ethval2);
+      rc = work_decode_eth(pool, work, val);
     else
       rc = work_decode(pool, work, val);
 
@@ -6676,7 +6624,7 @@ static void gen_stratum_work_cn(struct pool *pool, struct work *work)
 
   applog(LOG_DEBUG, "[THR%d] gen_stratum_work_cn() - algorithm = %s", work->thr_id, pool->algorithm.name);
   
-  cg_rlock(&pool->data_lock);	
+  cg_rlock(&pool->data_lock);
   work->job_id = strdup(pool->swork.job_id);
   work->XMRTarget = pool->XMRTarget;
   //strcpy(work->XMRID, pool->XMRID);

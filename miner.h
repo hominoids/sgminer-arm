@@ -781,12 +781,12 @@ static inline void flip128(void *dest_p, const void *src_p)
 
 static inline void flip168(void *dest_p, const void *src_p)
 {
-	uint32_t *dest = (uint32_t *)dest_p;
-	const uint32_t *src = (uint32_t *)src_p;
-	int i;
+  uint32_t *dest = (uint32_t *)dest_p;
+  const uint32_t *src = (uint32_t *)src_p;
+  int i;
 
-	for (i = 0; i < 42; i++)
-		dest[i] = swab32(src[i]);
+  for (i = 0; i < 42; i++)
+    dest[i] = swab32(src[i]);
 }
 
 
@@ -803,7 +803,7 @@ static inline void endian_flip128(void *dest_p, const void *src_p)
 }
 static inline void endian_flip168(void *dest_p, const void *src_p)
 {
-	flip168(dest_p, src_p);
+  flip168(dest_p, src_p);
 }
 
 #else
@@ -1525,7 +1525,7 @@ struct work {
   unsigned char device_target[32];
   double    device_diff;
   double    share_diff;
-  double	network_diff;
+  double    network_diff;
 
   uint32_t eth_epoch;
   uint64_t Nonce;
