@@ -14,7 +14,7 @@ uint2 amd_bitalign(uint2 src0, uint2 src1, uint2 src2)
           "v_alignbit_b32 %1, %5, %6, %7"
           : "=v" (dst.x), "=v" (dst.y)
           : "v" (src0.x), "v" (src1.x), "v" (src2.x),
-		    "v" (src0.y), "v" (src1.y), "v" (src2.y));
+                   "v" (src0.y), "v" (src1.y), "v" (src2.y));
     return dst;
 }
 
@@ -186,8 +186,9 @@ uint2 ROTL64_2(uint2 x, int y) {
 
 
 #define KECCAK_PROCESS(st, in_size, out_size, isolate)    do { \
-    for (int r = 0; r < (23 + !(isolate)); r++) { \
-        KECCAKF_1600_RND(st, r, 25); \
+    for (int r = 0;r < (23);) { \
+        if (isolate) \
+            KECCAKF_1600_RND(st, r++, 25); \
     } \
     KECCAKF_1600_RND(st, 23, out_size); \
 } while(0)
