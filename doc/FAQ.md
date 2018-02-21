@@ -6,7 +6,7 @@ Binaries are a hassle to maintain. On Linux, they should be provided
 by your distribution's package manager anyway. Running an unoptimised
 binary gives a minor performance penalty. Running binaries from
 untrusted providers is a security risk. There has not been sufficient
-community interest to provide distributed determininstic builds.
+community interest to provide distributed deterministic builds.
 
 
 ## Where are the step-by-step installation instructions for Linux?
