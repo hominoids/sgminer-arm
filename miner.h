@@ -1161,9 +1161,6 @@ extern bool opt_luffa_parallel;
 extern int opt_hamsi_expand_big;
 extern bool opt_hamsi_short;
 
-// Cryptonight options
-extern bool opt_cryptonight_monero;
-
 #if LOCK_TRACKING
 extern pthread_mutex_t lockstat_lock;
 #endif
@@ -1181,6 +1178,7 @@ extern char *get_proxy(char *url, struct pool *pool);
 extern void __bin2hex(char *s, const unsigned char *p, size_t len);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
+extern bool eth_hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
 typedef bool (*sha256_func)(struct thr_info*, const unsigned char *pmidstate,
   unsigned char *pdata,
@@ -1210,6 +1208,7 @@ extern void clear_stratum_shares(struct pool *pool);
 extern void clear_pool_work(struct pool *pool);
 extern void set_target(unsigned char *dest_target, double diff, double diff_multiplier2, const int thr_id);
 extern void set_target_neoscrypt(unsigned char *target, double diff, const int thr_id);
+extern double le256todiff(const void* le256, double diff_multiplier);
 
 extern void kill_work(void);
 
@@ -1368,11 +1367,11 @@ struct pool {
   
   //XMR stuff
   char XMRAuthID[64];
-  uint32_t XMRTarget;
   uint32_t XMRBlobLen;
   uint8_t XMRBlob[128];
   pthread_mutex_t XMRGlobalNonceLock;
   uint32_t XMRGlobalNonce;
+  bool is_monero;
   
   double diff_accepted;
   double diff_rejected;
@@ -1383,7 +1382,7 @@ struct pool {
   bool lagging;
   bool probed;
   enum pool_state state;
-  bool keepalive;
+  bool no_keepalive;
   bool submit_old;
   bool remove_at_start;
   bool removed;
@@ -1531,11 +1530,8 @@ struct work {
   uint64_t Nonce;
   
   /* cryptonight stuff */
-  uint32_t XMRTarget;
   uint32_t XMRBlobLen;
-  uint8_t XMRBlob[128];
-    
-  uint32_t XMRNonce;
+  bool is_monero;
   
   unsigned char equihash_data[1487];
 

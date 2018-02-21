@@ -437,6 +437,7 @@ sgminer 4.2.1-116-g2e8b-dirty
   * [algorithm](#algorithm)
   * [description](#description)
   * [device](#device)
+  * [extranonce](#extranonce)
   * [gpu-engine](#gpu-engine)
   * [gpu-fan](#gpu-fan)
   * [gpu-memclock](#gpu-memclock)
@@ -445,9 +446,10 @@ sgminer 4.2.1-116-g2e8b-dirty
   * [gpu-vddc](#gpu-vddc)
   * [intensity](#intensity)
   * [lookup-gap](#lookup-gap)
+  * [monero](#monero)
   * [name](#pool-name)
   * [nfactor](#nfactor)
-  * [no-extranonce](#no-extranonce)
+  * [no-keepalive](#no-keepalive)
   * [pass](#pass)
   * [priority](#priority)
   * [profile](#profile)
@@ -1262,7 +1264,7 @@ Used with [auto-fan](#auto-fan) and [auto-gpu](#auto-gpu).
 
 [Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [GPU Options](#gpu-options)
 
-### temp-cutoff
+### temp-hysteresis
 
 Set the allowable temperature fluctuation a GPU can operate outside of limits.
 
@@ -1366,6 +1368,22 @@ See [device](#device).
 
 [Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [Pool Options](#pool-options)
 
+### extranonce
+
+Enables 'extranonce.subscribe' stratum functionality.
+
+*Available*: Global, Pool
+
+*Config File Syntax:* `"extranonce":true`
+
+*Command Line Syntax:* `--extranonce` `--pool-extranonce`
+
+*Argument:* None
+
+*Default:* `false`
+
+[Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [Pool Options](#pool-options)
+
 ### [pool-]gpu-engine
 
 See [gpu-engine](#gpu-engine)
@@ -1414,6 +1432,22 @@ See [lookup-gap](#lookup-gap)
 
 [Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [Pool Options](#pool-options)
 
+### monero
+
+This flag is required for Monero mining after the hard fork in March 2018. When it is set then the appropriate Cryptonight variant for Monero is chosen automatically.
+
+*Available*: Global, Pool
+
+*Config File Syntax:* `"monero":true`
+
+*Command Line Syntax:* `--monero` `--pool-monero`
+
+*Argument:* None
+
+*Default:* `false`
+
+[Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [Pool Options](#pool-options)
+
 ### [pool-]name
 
 Set a name for a pool.
@@ -1436,15 +1470,15 @@ See [nfactor](#nfactor)
 
 [Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [Pool Options](#pool-options)
 
-### no-extranonce
+### no-keepalive
 
-Disable 'extranonce' stratum subscribe for pool.
+Disables periodic sending of keepalive packets. Currently only used by Cryptonight.
 
-*Available*: Pool
+*Available*: Global, Pool
 
-*Config File Syntax:* `"no-extranonce":true`
+*Config File Syntax:* `"no-keepalive":true`
 
-*Command Line Syntax:* `--no-extranonce` `--pool-no-extranonce`
+*Command Line Syntax:* `--no-keepalive` `--pool-no-keepalive`
 
 *Argument:* None
 

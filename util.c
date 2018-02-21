@@ -670,6 +670,17 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
   return ret;
 }
 
+bool eth_hex2bin(unsigned char *p, const char *hexstr, size_t len)
+{
+  if (hexstr == NULL)
+    return false;
+  if (hexstr[0] == '0' && hexstr[1] == 'x')
+    hexstr += 2;
+  memset(p, 0, len);
+  len = MIN(len, (strlen(hexstr) + 1) / 2);
+  return hex2bin(p, hexstr, len);
+}
+
 bool fulltest(const unsigned char *hash, const unsigned char *target)
 {
   uint32_t *hash32 = (uint32_t *)hash;
@@ -1361,23 +1372,14 @@ bool sock_full(struct pool *pool)
 
 bool sock_keepalived(struct pool *pool, const char *rpc2_id, int work_id)
 {
-  json_t *val = NULL, *res_val, *err_val;
-  char *s = NULL, *sret;
-  json_error_t err;
-  bool ret = false;
+  bool ret = true;
 
-  if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
-    s = malloc(300 + strlen(rpc2_id) + 10);
-    snprintf(s, 128, "{\"method\": \"keepalived\", \"params\": {\"id\": \"%s\"}, \"id\":%d}", rpc2_id, work_id);
-  } else {
-    return true;
-  }
+  if (!pool->no_keepalive && pool->algorithm.type == ALGO_CRYPTONIGHT) {
+    size_t size = 128 + strlen(rpc2_id);
+    char *s = malloc(size);
+    snprintf(s, size, "{\"method\": \"keepalived\", \"params\": {\"id\": \"%s\"}, \"id\": \"ping\"}", rpc2_id);
 
-  if (stratum_send(pool, s, strlen(s))) {
-    ret = true;
-  }
-
-  if (s) {
+    ret = stratum_send(pool, s, strlen(s));
     free(s);
   }
 
@@ -1648,38 +1650,15 @@ out:
   /* Annoying but we must not leak memory */
   //only free these if we failed
   if (!ret) {
-    if (job_id != NULL) {
-      free(job_id);
-    }
-    
-    if (prev_hash != NULL) {
-      free(prev_hash);
-    }
-    
-    if (reserved != NULL) {
-      free(reserved);
-    }
-    
-    if (merkle != NULL) {
-      free(merkle);
-    }
-    
-    if (bbversion != NULL) {
-      free(bbversion);
-    }
-    
-    if (nbit != NULL) {
-      free(nbit);
-    }
-    
-    if (ntime != NULL) {
-      free(ntime);
-    }
+    free(job_id);
+    free(prev_hash);
+    free(reserved);
+    free(merkle);
+    free(bbversion);
+    free(nbit);
+    free(ntime);
   }
-  
-  if (header != NULL) {
-    free(header);
-  }
+  free(header);
   
   return ret;
 }
@@ -1715,20 +1694,13 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
   if (!job_id || !prev_hash || !coinbase1 || !coinbase2 || !bbversion || !nbit || !ntime) {
     /* Annoying but we must not leak memory */
-    if (job_id)
-      free(job_id);
-    if (prev_hash)
-      free(prev_hash);
-    if (coinbase1)
-      free(coinbase1);
-    if (coinbase2)
-      free(coinbase2);
-    if (bbversion)
-      free(bbversion);
-    if (nbit)
-      free(nbit);
-    if (ntime)
-      free(ntime);
+    free(job_id);
+    free(prev_hash);
+    free(coinbase1);
+    free(coinbase2);
+    free(bbversion);
+    free(nbit);
+    free(ntime);
     goto out;
   }
 
@@ -1845,44 +1817,13 @@ out:
 }
 
 
-bool parse_diff_ethash(char* Target, const char* TgtStr)
-{
-  bool ret = false;
-  int len = strlen(TgtStr);
-  if(len != 64 && len != 66) {
-    char NewTgtStr[65];
-    int offset = (len > 2 && TgtStr[1] == 'x' ? 2 : 0);
-    int PadLen = 64 + offset - len;
-    
-    if (PadLen >= 0 && len >= offset) {
-      memset(NewTgtStr, '0', PadLen);
-      memcpy(NewTgtStr + PadLen, TgtStr + offset, len - offset);
-    
-      NewTgtStr[64] = 0x00;
-      ret = hex2bin(Target, NewTgtStr, 32);
-    }
-  }
-  else
-    ret = hex2bin(Target, TgtStr + 2, 32) || hex2bin(Target, TgtStr, 32);
-  return ret;
-}
-
-extern double eth2pow256;
-double le256todouble(const void *target);
 static bool parse_notify_ethash(struct pool *pool, json_t *val)
 {
   char *job_id;
   bool clean;
   uint8_t EthWork[32], SeedHash[32], Target[32], NetDiff[32];
-  char *EthWorkStr, *SeedHashStr, *TgtStr, *BlockHeightStr, *NetDiffStr = NULL;
+  char *EthWorkStr, *SeedHashStr, *TgtStr, *NetDiffStr = NULL;
   int ret = true;
-
-  /*json_t *arr = json_array_get(val, 0);
-  if (!arr || !json_is_array(arr)) {
-    applog(LOG_DEBUG, "parse_notify_ethash: Array was bad.");
-    ret = false;
-    goto out;
-  }*/
 
   job_id = json_array_string(val, 0);
   EthWorkStr = json_array_string(val, 1);
@@ -1901,21 +1842,20 @@ static bool parse_notify_ethash(struct pool *pool, json_t *val)
     goto out;
   }
   
-  ret &= hex2bin(EthWork, EthWorkStr + 2, 32) || hex2bin(EthWork, EthWorkStr, 32);
+  ret &= eth_hex2bin(EthWork, EthWorkStr, 32);
   
-  ret &= hex2bin(SeedHash, SeedHashStr + 2, 32) || hex2bin(SeedHash, SeedHashStr, 32);
+  ret &= eth_hex2bin(SeedHash, SeedHashStr, 32);
   
-  ret &= parse_diff_ethash(Target, TgtStr);
+  ret &= eth_hex2bin(Target, TgtStr, 32);
   
-  if (!ret || (NetDiffStr != NULL && !parse_diff_ethash(NetDiff, NetDiffStr))) {
+  if (!ret || (NetDiffStr != NULL && !eth_hex2bin(NetDiff, NetDiffStr, 32))) {
     ret = false;
     goto out;
   }
   
   cg_wlock(&pool->data_lock);
   
-  if (pool->swork.job_id != NULL)
-    free(pool->swork.job_id);
+  free(pool->swork.job_id);
   pool->swork.job_id = strdup(job_id);
   pool->swork.clean = clean;
  
@@ -1927,13 +1867,13 @@ static bool parse_notify_ethash(struct pool *pool, json_t *val)
   memcpy(pool->EthWork, EthWork, 32);
   
   swab256(pool->Target, Target);
-  pool->swork.diff = eth2pow256 / le256todouble(pool->Target);
+  pool->swork.diff = le256todiff(pool->Target, pool->algorithm.diff_multiplier2);
   suffix_string_double(pool->swork.diff, pool->diff, sizeof(pool->diff), 0);
   
   pool->diff1 = 0;
   if (NetDiffStr != NULL) {
     swab256(pool->NetDiff, NetDiff);
-    pool->diff1 = eth2pow256 / le256todouble(pool->NetDiff);
+    pool->diff1 = le256todiff(pool->NetDiff, pool->algorithm.diff_multiplier2);
   }
   pool->getwork_requested++;
   //pool->eth_cache.disabled = false;
@@ -1954,16 +1894,11 @@ static bool parse_notify_ethash(struct pool *pool, json_t *val)
     opt_work_update = true;
 out:
   /* Annoying but we must not leak memory */
-  if (job_id != NULL)
-    free(job_id);
-  if (SeedHashStr != NULL)
-    free(SeedHashStr);
-  if (EthWorkStr != NULL)
-    free(EthWorkStr);
-  if (TgtStr != NULL)
-    free(TgtStr);
-  if (NetDiffStr != NULL)
-    free(NetDiffStr);
+  free(job_id);
+  free(SeedHashStr);
+  free(EthWorkStr);
+  free(TgtStr);
+  free(NetDiffStr);
   return ret;
 }
 
@@ -2014,17 +1949,18 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
 
   cg_wlock(&pool->data_lock);
   
-  if (pool->swork.job_id != NULL) {
-    free(pool->swork.job_id);
-  }
+  free(pool->swork.job_id);
   
   pool->swork.job_id = strdup(job_id);
   pool->swork.clean = true;
   
   pool->XMRBlobLen = strlen(blobval) >> 1;
+  pool->diff1 = 0;
   memcpy(pool->XMRBlob, XMRBlob, pool->XMRBlobLen);
-  pool->XMRTarget = XMRTarget;
-  pool->swork.diff = (double)0xffffffff / XMRTarget;
+  memset(pool->Target, 0xff, 28);
+  memcpy(pool->Target + 28, &XMRTarget, 4);
+  pool->swork.diff = (double)UINT32_MAX / XMRTarget;
+  suffix_string_double(pool->swork.diff, pool->diff, sizeof(pool->diff), 0);
   pool->getwork_requested++;
   
   cg_wunlock(&pool->data_lock);
@@ -2107,9 +2043,7 @@ static bool parse_target(struct pool *pool, json_t *val)
     applog(pool == current_pool() ? LOG_NOTICE : LOG_DEBUG, "%s target changed to %s", get_pool_name(pool), str);
   }
 
-  if (str != NULL) {
-    free(str);
-  }
+  free(str);
 
   return true;
 }
@@ -2142,10 +2076,43 @@ static bool parse_extranonce_equihash(struct pool *pool, json_t *val)
   return true;
 }
 
+static bool parse_extranonce_ethash(struct pool *pool, json_t *val)
+{
+  char *n1str;
+
+  if (!(n1str = json_array_string(val, 0))) {
+    applog(LOG_NOTICE, "extranonce failed");
+    return false;
+  }
+  applog(LOG_NOTICE, "extranonce: %s", n1str);
+
+  cg_wlock(&pool->data_lock);
+  free(pool->nonce1);
+  pool->nonce1 = n1str;
+  pool->n1_len = strlen(n1str) / 2; //size in bytes of nonce1 in the header
+
+  free(pool->nonce1bin);
+  if (unlikely(!(pool->nonce1bin = (unsigned char *)calloc(pool->n1_len, 1)))) {
+    quithere(1, "%s: Failed to calloc pool->nonce1bin", __func__);
+  }
+
+  hex2bin(pool->nonce1bin, pool->nonce1, pool->n1_len);
+  pool->n2size = 4 - pool->n1_len; //size in bytes of nonce2 in the header
+  pool->nonce2 = 0; //reset nonce 2 to 0
+  cg_wunlock(&pool->data_lock);
+
+  applog(LOG_NOTICE, "%s extranonce set to %s", get_pool_name(pool), n1str);
+
+  return true;
+}
+
 static bool parse_extranonce(struct pool *pool, json_t *val)
 {
   if (pool->algorithm.type == ALGO_EQUIHASH) {
     return parse_extranonce_equihash(pool, val);
+  }
+  else if (pool->algorithm.type == ALGO_ETHASH) {
+    return parse_extranonce_ethash(pool, val);
   }
 
   char *nonce1;
@@ -2456,7 +2423,6 @@ bool auth_stratum(struct pool *pool)
   if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
     sprintf(s, "{\"method\": \"login\", \"params\": {\"login\": \"%s\", \"pass\": \"%s\", \"agent\": \"%s/%s\"}, \"id\": 1}",
       pool->rpc_user, pool->rpc_pass, PACKAGE, VERSION);
-  
     
     swork_id++;
   }
@@ -3060,13 +3026,17 @@ resend:
   {
     if(!pool->stratum_url) pool->stratum_url = pool->sockaddr_url;
     
+    cg_wlock(&pool->data_lock);
     pool->stratum_active = true;
     pool->next_diff = 0;
     pool->swork.diff = 1;
     
     pool->sessionid = NULL;
+    free(pool->nonce1);
     pool->nonce1 = NULL;
     pool->n1_len = 0;
+    pool->n2size = 4;
+    cg_wunlock(&pool->data_lock);
     
     json_decref(val);
     return true;

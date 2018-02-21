@@ -118,15 +118,13 @@ void LightEthash(uint8_t *restrict OutHash, uint8_t *restrict MixHash, const uin
 
 void ethash_regenhash(struct work *work)
 {
-  work->Nonce += *((uint32_t *)(work->data + 32));
+  uint8_t hash[32];
   applog(LOG_DEBUG, "Regenhash: First qword of input: 0x%016llX.", work->Nonce);
   cg_rlock(&work->pool->data_lock);
-  LightEthash(work->hash, work->mixhash, work->data, (Node *)work->pool->eth_cache.dag_cache, work->eth_epoch, work->Nonce);
+  LightEthash(hash, work->mixhash, work->data, (Node *)work->pool->eth_cache.dag_cache, work->eth_epoch, work->Nonce);
+  for (int i = 0; i < 32; i++)
+    work->hash[i] = hash[31 - i];
   cg_runlock(&work->pool->data_lock);
   
-  char *DbgHash = bin2hex(work->hash, 32);
-  
-  applog(LOG_DEBUG, "Regenhash result: %s.", DbgHash);
-  applog(LOG_DEBUG, "Last ulong: 0x%016llX.", bswap_64(*((uint64_t *)(work->hash + 0))));
-  free(DbgHash);
+  applog(LOG_DEBUG, "Last ulong: 0x%016llX.", *((uint64_t *)(work->hash + 24)));
 }

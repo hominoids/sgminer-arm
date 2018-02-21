@@ -973,7 +973,7 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
   unsigned int num = 0;
   cl_int status = 0;
   cl_ulong le_target;
-  cl_uint HighNonce, Isolate = UINT32_MAX;
+  cl_uint Isolate = UINT32_MAX;
 
   dag = &blk->work->thr->cgpu->eth_dag;
   cg_ilock(&dag->lock);
@@ -1060,10 +1060,7 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
   }
 
   memcpy(&le_target, blk->work->device_target + 24, 8);
-  mutex_lock(&eth_nonce_lock);
-  HighNonce = eth_nonce++;
-  blk->work->Nonce = (cl_ulong) HighNonce << 32;
-  mutex_unlock(&eth_nonce_lock);
+  blk->work->Nonce = (blk->work->Nonce >> 32 << 32) | blk->work->blk.nonce;
 
   num = 0;
   kernel = &clState->kernel;
@@ -1097,13 +1094,26 @@ static cl_int queue_cryptonight_kernel(_clState *clState, dev_blk_ctx *blk, __ma
 {
   cl_kernel *kernel = &clState->kernel;
   unsigned int num = 0;
-  cl_int status = 0, tgt32 = (blk->work->XMRTarget);
-  cl_ulong le_target = ((cl_ulong)(blk->work->XMRTarget));
+  cl_int status = 0, tgt32 = *(uint32_t*)(blk->work->target + 28);
 
-  //le_target = *(cl_ulong *)(blk->work->device_target + 24);
+  int variant = monero_variant(blk->work);
+  if (variant != clState->monero_variant) {
+    applog(LOG_NOTICE, "switch to monero variant %d", variant);
+    char kernel_name[20] = "search1";
+    if (variant > 0)
+      snprintf(kernel_name + 7, sizeof(kernel_name) - 7, "_var%d", variant);
+    clReleaseKernel(clState->extra_kernels[0]);
+    clState->extra_kernels[0] = clCreateKernel(clState->program, kernel_name, &status);
+    if (status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d: Creating Kernel \"%s\" from program. (clCreateKernel)", kernel_name, status);
+      return status;
+    }
+    clState->monero_variant = variant;
+  }
+
   memcpy(clState->cldata, blk->work->data, blk->work->XMRBlobLen);
   
-  status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, blk->work->XMRBlobLen, clState->cldata , 0, NULL, NULL);
+  status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, CL_FALSE, 0, blk->work->XMRBlobLen, clState->cldata , 0, NULL, NULL);
   
   CL_SET_ARG(clState->CLbuffer0);
   CL_SET_ARG(blk->work->XMRBlobLen);
@@ -1299,11 +1309,11 @@ static algorithm_settings_t algos[] = {
   { "blake256r14", ALGO_BLAKE,     "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x00000000UL, 0, 128, 0, blake256_regenhash, precalc_hash_blake256, queue_blake_kernel, gen_hash, NULL },
   { "vanilla",     ALGO_VANILLA,   "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x000000ffUL, 0, 128, 0, blakecoin_regenhash, precalc_hash_blakecoin, queue_blake_kernel, gen_hash, NULL },
 
-  { "ethash",     ALGO_ETHASH,   "", 1, 1, 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0x000000FFUL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
-  { "ethash-genoil",     ALGO_ETHASH,   "", 1, 1, 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0x000000FFUL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
-  { "ethash-new",     ALGO_ETHASH,   "", 1, 1, 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0x000000FFUL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
+  { "ethash",        ALGO_ETHASH,   "", 0x100010001LLU, 0x100010001LLU, 0x100010001LLU, 0, 0, 0xFF, 0xFFFF000000000000ULL, 72UL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
+  { "ethash-genoil", ALGO_ETHASH,   "", 0x100010001LLU, 0x100010001LLU, 0x100010001LLU, 0, 0, 0xFF, 0xFFFF000000000000ULL, 72UL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
+  { "ethash-new",    ALGO_ETHASH,   "", 0x100010001LLU, 0x100010001LLU, 0x100010001LLU, 0, 0, 0xFF, 0xFFFF000000000000ULL, 72UL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
 
-  { "cryptonight", ALGO_CRYPTONIGHT, "", (1ULL << 32), (1ULL << 32), (1ULL << 32), 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 6, 0, 0, cryptonight_regenhash, NULL, queue_cryptonight_kernel, gen_hash, NULL },
+  { "cryptonight", ALGO_CRYPTONIGHT, "", 1, 0x100010001LLU, 0x100010001LLU, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 6, 0, 0, cryptonight_regenhash, NULL, queue_cryptonight_kernel, gen_hash, NULL },
   
   { "equihash",     ALGO_EQUIHASH,   "", 1, (1ULL << 28), (1ULL << 28), 0, 0, 0x20000, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, equihash_regenhash, NULL, queue_equihash_kernel, gen_hash, append_equihash_compiler_options },
   

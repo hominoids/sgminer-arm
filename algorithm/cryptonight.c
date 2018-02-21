@@ -16,19 +16,25 @@
 #define VARIANT1_1(p) \
   do if (Variant > 0) \
   { \
-    uint8_t tmp = ((const uint8_t*)(p))[11]; \
-    uint8_t tmp1 = (tmp>>4)&1, tmp2 = (tmp>>5)&1, tmp3 = tmp1^tmp2; \
-    uint8_t tmp0 = nonce_flag ? tmp3 : tmp1 + 1; \
-    ((uint8_t*)(p))[11] = (tmp & 0xef) | (tmp0<<4); \
+    const uint8_t tmp = ((const uint8_t*)(p))[11]; \
+    static const uint32_t table = 0x75310; \
+    const uint8_t index = (((tmp >> 3) & 6) | (tmp & 1)) << 1; \
+    ((uint8_t*)(p))[11] = tmp ^ ((table >> index) & 0x30); \
   } while(0)
 
-#define VARIANT1_2(p) VARIANT1_1(p)
+#define VARIANT1_2(p) \
+  do \
+  { \
+    ((uint32_t*)(p))[2] ^= nonce; \
+  } while(0)
+
 #define VARIANT1_INIT() \
   if (Variant > 0 && Length < 43) \
   { \
     quit(1, "Cryptonight variants need at least 43 bytes of data"); \
   } \
-  const uint8_t nonce_flag = Variant > 0 ? ((const uint8_t*)Input)[39] & 0x01 : 0
+  const uint32_t nonce = Variant > 0 ? *(uint32_t*)(Input + 39) : 0
+
 
 static const uint64_t keccakf_rndc[24] = 
 {
@@ -321,11 +327,8 @@ void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length, int Variant)
 void cryptonight_regenhash(struct work *work)
 {
 	uint32_t data[20];
-	uint32_t *nonce = (uint32_t *)(work->data + 39);
-	int variant = opt_cryptonight_monero && ((uint8_t *)work->data)[0] >= 7 ? ((uint8_t *)work->data)[0] - 6 : 0;
+	int variant = monero_variant(work);
 	uint32_t *ohash = (uint32_t *)(work->hash);
-	
-	work->XMRNonce = *nonce;
 	
 	memcpy(data, work->data, work->XMRBlobLen);
 		
@@ -333,7 +336,7 @@ void cryptonight_regenhash(struct work *work)
 	
 	char *tmpdbg = bin2hex((uint8_t*) ohash, 32);
 	
-	applog(LOG_DEBUG, "cryptonight_regenhash: %s\n", tmpdbg);
+	applog(LOG_DEBUG, "cryptonight_regenhash_var%d: %s", variant, tmpdbg);
 	
 	free(tmpdbg);
 	

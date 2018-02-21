@@ -1483,8 +1483,9 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
     mutex_unlock(&work->pool->XMRGlobalNonceLock);
   }
   
+  size_t global_work_offset = work->blk.nonce;
   if (clState->goffset)
-    p_global_work_offset = (size_t *)&work->blk.nonce;
+    p_global_work_offset = &global_work_offset;
   
   if (gpu->algorithm.type == ALGO_CRYPTONIGHT) {
     size_t GlobalThreads = *globalThreads, Nonce[2] = { (size_t)work->blk.nonce, 1}, gthreads[2] = { *globalThreads, 8 }, lthreads[2] = { *localThreads, 8 };
