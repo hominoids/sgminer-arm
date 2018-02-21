@@ -1096,7 +1096,7 @@ static cl_int queue_cryptonight_kernel(_clState *clState, dev_blk_ctx *blk, __ma
   unsigned int num = 0;
   cl_int status = 0, tgt32 = *(uint32_t*)(blk->work->target + 28);
 
-  int variant = monero_variant(blk->work);
+  int variant = MIN(1, monero_variant(blk->work)); // limit variant to prevent DOS
   if (variant != clState->monero_variant) {
     applog(LOG_NOTICE, "switch to monero variant %d", variant);
     char kernel_name[20] = "search1";
