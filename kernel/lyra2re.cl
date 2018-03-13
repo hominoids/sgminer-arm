@@ -29,7 +29,6 @@
  * @author   djm34
  */
 
-#pragma OPENCL EXTENSION cl_amd_printf : enable
 
 #ifndef LYRA2RE_CL
 #define LYRA2RE_CL

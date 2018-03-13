@@ -10,7 +10,8 @@
 #define ACCESSES	64
 #define FNV_PRIME	0x01000193U
 
-#pragma OPENCL EXTENSION cl_amd_media_ops2 : enable
+#define arm_bitalign(src0, src1, src2)  ((((((long)src0) << 32) | (long)src1) >> (src2 & 31)))
+#define arm_bfe(src0, offset, width)    ((src0 << (32 - (offset) - width)) >> (32 - width))
 
 
 static __constant uint2 const Keccak_f1600_RC[24] = {
@@ -40,8 +41,8 @@ static __constant uint2 const Keccak_f1600_RC[24] = {
 	(uint2)(0x80008008, 0x80000000),
 };
 
-#define ROTL64_1(x, y)	amd_bitalign((x), (x).s10, 32 - (y))
-#define ROTL64_2(x, y)	amd_bitalign((x).s10, (x), 32 - (y))
+#define ROTL64_1(x, y)	arm_bitalign((x), (x).s10, 32 - (y))
+#define ROTL64_2(x, y)	arm_bitalign((x).s10, (x), 32 - (y))
 
 
 #define KECCAKF_1600_RND(a, i, outsz) do { \
@@ -232,7 +233,7 @@ __kernel void search(
 			#pragma unroll
 			for (uint y = 0; y < 8; ++y)
 			{
-				if (thread_id == amd_bfe(a, 3U, 2U))
+				if (thread_id == arm_bfe(a, 3U, 2U))
 					share->uints[0] = fnv(init0 ^ (a + y), ((uint *)&mix)[y]) % DAG_SIZE;
 			
 				barrier(CLK_LOCAL_MEM_FENCE);

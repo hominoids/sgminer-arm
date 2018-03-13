@@ -106,3 +106,5 @@ SGMiner-GM is the collaborative result of so many talented people. Here, you can
 + [Jeff Garzik](https://github.com/jgarzik)
 + [Alexey Karimov](https://github.com/akarimov)
 + [Andreas Oeldenberger](https://github.com/anoelden)
++ [hominoids](https://github.com/hominoids)
+

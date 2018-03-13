@@ -1,37 +1,5 @@
-#if (defined(__Tahiti__) || defined(__Pitcairn__) || defined(__Capeverde__) || defined(__Oland__) || defined(__Hainan__))
-
-#define LEGACY
-
-#endif
-
-
-#if defined(__GCNMINC__)
-
-uint2 amd_bitalign(uint2 src0, uint2 src1, uint2 src2)
-{
-    uint2 dst;
-    __asm("v_alignbit_b32 %0, %2, %3, %4\n"
-          "v_alignbit_b32 %1, %5, %6, %7"
-          : "=v" (dst.x), "=v" (dst.y)
-          : "v" (src0.x), "v" (src1.x), "v" (src2.x),
-                   "v" (src0.y), "v" (src1.y), "v" (src2.y));
-    return dst;
-}
-
-#elif defined(cl_amd_media_ops)
-
-#pragma OPENCL EXTENSION cl_amd_media_ops : enable
-
-#elif defined(cl_nv_pragma_unroll)
-
-#define NVIDIA
-
-#else
 
 #define UNKNOWN
-
-#endif
-
 
 #if WORKSIZE % 4 != 0
 #error "WORKSIZE has to be a multiple of 4"
@@ -70,40 +38,8 @@ static __constant uint2 const Keccak_f1600_RC[24] = {
 };
 
 
-#ifdef LEGACY
-#define barrier(x) mem_fence(x)
-#elif defined(cl_amd_media_ops) && WORKSIZE <= 64
-#error "WORKSIZE <= 64 isn't supported by newer AMD drivers and WORKSIZE > 64 is required"
-#endif
-
-
-#ifdef UNKNOWN
-
 #define ROTL64_1(x, y) as_uint2(rotate(as_ulong(x), (ulong)(y)))
 #define ROTL64_2(x, y) ROTL64_1(x, (y) + 32)
-
-#elif defined(NVIDIA)
-
-uint2 ROTL64_1(uint2 x, int y) {
-    uint2 result;
-    asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(x.y), "r"(x.x), "r"(y));
-    asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(x.x), "r"(x.y), "r"(y));
-    return result;
-}
-uint2 ROTL64_2(uint2 x, int y) {
-    uint2 result;
-    asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(x.x), "r"(x.y), "r"(y + 32));
-    asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(x.y), "r"(x.x), "r"(y + 32));
-    return result;
-}
-
-#else
-
-#define ROTL64_1(x, y) amd_bitalign((x), (x).s10, 32 - (y))
-#define ROTL64_2(x, y) amd_bitalign((x).s10, (x), 32 - (y))
-
-#endif
-
 
 #define KECCAKF_1600_RND(a, i, outsz) do { \
     const uint2 m0 = a[0] ^ a[5] ^ a[10] ^ a[15] ^ a[20] ^ ROTL64_1(a[2] ^ a[7] ^ a[12] ^ a[17] ^ a[22], 1);\
@@ -221,18 +157,6 @@ typedef union {
 } compute_hash_share;
 
 
-#ifdef LEGACY
-
-#define MIX(x) \
-do { \
-    if (get_local_id(0) == lane_idx) \
-        buffer[hash_id] = fnv(init0 ^ (a + x), mix.s##x) % DAG_SIZE; \
-    mem_fence(CLK_LOCAL_MEM_FENCE); \
-    mix = fnv(mix, g_dag[buffer[hash_id]].uint8s[thread_id]); \
-} while(0)
-
-#else
-
 #define MIX(x) \
 do { \
     buffer[get_local_id(0)] = fnv(init0 ^ (a + x), mix.s##x) % DAG_SIZE; \
@@ -240,8 +164,6 @@ do { \
     mix = fnv(mix, g_dag[buffer[lane_idx]].uint8s[thread_id]); \
     mem_fence(CLK_LOCAL_MEM_FENCE); \
 } while(0)
-
-#endif
 
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
@@ -261,11 +183,7 @@ __kernel void search(
     const uint hash_id = get_local_id(0) / 4;
     
     __local compute_hash_share sharebuf[WORKSIZE / 4];
-#ifdef LEGACY
-    __local uint buffer[WORKSIZE / 4];
-#else
     __local uint buffer[WORKSIZE];
-#endif
     __local compute_hash_share * const share = sharebuf + hash_id;
 
     // sha3_512(header .. nonce)
@@ -302,12 +220,8 @@ __kernel void search(
 
         barrier(CLK_LOCAL_MEM_FENCE);
 
-#ifdef LEGACY
-        for (uint a = 0; a < (ACCESSES & isolate); a += 8) {
-#else
         #pragma unroll 1
         for (uint a = 0; a < ACCESSES; a += 8) {
-#endif
             const uint lane_idx = 4*hash_id + a / 8 % 4;
             MIX(0);
             MIX(1);

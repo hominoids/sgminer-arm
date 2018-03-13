@@ -24,15 +24,6 @@
 #define uint uint32_t
 #define uchar uint8_t
 #endif
-#ifdef cl_amd_fp64
-#define AMD
-#endif
-#if (defined(__Tahiti__) || defined(__Pitcairn__) || defined(__Capeverde__) || defined(__Oland__)) && !defined(AMD_LEGACY)
-#define AMD_LEGACY
-#endif
-#ifdef cl_nv_pragma_unroll
-#define NVIDIA
-#endif
 //#define ENABLE_DEBUG
 
 
@@ -56,19 +47,9 @@
 
 #define ROUND0_INPUTS_PER_WORK_ITEM 1
 
-#if defined(AMD)
-#define THREADS_PER_WRITE(round) (((round) <= 5) ? 2 : 1)
-#else
 #define THREADS_PER_WRITE(round) 1
-#endif
 
-#if defined(AMD) && !defined(AMD_LEGACY)
-#define OPTIM_24BYTE_WRITES
-#endif
-#define OPTIM_16BYTE_WRITES
-#if !defined(AMD_LEGACY)
 #define OPTIM_8BYTE_WRITES
-#endif
 
 //#define OPTIM_FAST_INTEGER_DIVISION
 //#define OPTIM_COMPACT_ROW_COUNTERS

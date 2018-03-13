@@ -55,7 +55,7 @@ static char *file_contents(const char *filename, int *length)
 void set_base_compiler_options(build_kernel_data *data)
 {
   char buf[255];
-  sprintf(data->compiler_options, "-I \"%s\" -I \"%s/kernel\" -I \".\" -D WORKSIZE=%d",
+  sprintf(data->compiler_options, "-I %s -I %s/kernel -I . -D WORKSIZE=%d",
       data->sgminer_path, data->sgminer_path, (int)data->work_size);
   applog(LOG_DEBUG, "Setting worksize to %d", (int)(data->work_size));
 
@@ -63,9 +63,9 @@ void set_base_compiler_options(build_kernel_data *data)
   strcat(data->binary_filename, buf);
   
   if (data->kernel_path) {
-    strcat(data->compiler_options, " -I \"");
+    strcat(data->compiler_options, " -I ");
     strcat(data->compiler_options, data->kernel_path);
-    strcat(data->compiler_options, "\"");
+    strcat(data->compiler_options, "/");
   }
 
   if (data->opencl_version < 1.1)

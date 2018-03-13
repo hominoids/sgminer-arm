@@ -1,11 +1,11 @@
-#pragma OPENCL EXTENSION cl_amd_media_ops2 : enable
-
 
 #include "wolf-aes.cl"
 #include "wolf-skein.cl"
 #include "jh.cl"
 #include "blake256.cl"
 #include "groestl256.cl"
+
+#define arm_bfe(src0, offset, width)    ((src0 << (32 - (offset) - width)) >> (32 - width))
 
 #define VARIANT0_PARAMS
 #define VARIANT0_1(p)
@@ -198,9 +198,7 @@ void keccakf1600_2(ulong *st)
 
 static const __constant uchar rcon[8] = { 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40 };
 
-#pragma OPENCL EXTENSION cl_amd_media_ops2 : enable
-
-#define BYTE(x, y)	(amd_bfe((x), (y) << 3U, 8U))
+#define BYTE(x, y)	(arm_bfe((x), (y) << 3U, 8U))
 
 #define SubWord(inw)		((sbox[BYTE(inw, 3)] << 24) | (sbox[BYTE(inw, 2)] << 16) | (sbox[BYTE(inw, 1)] << 8) | sbox[BYTE(inw, 0)])
 

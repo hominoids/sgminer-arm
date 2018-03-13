@@ -1,25 +1,108 @@
-# sgminer
+# sgminer-arm
 
 
 ## Introduction
 
-This is a multi-threaded multi-pool GPU miner with ATI GPU monitoring,
-(over)clocking and fanspeed support for scrypt-based cryptocurrency. It is
-based on cgminer by Con Kolivas (ckolivas), which is in turn based on
+This is a multi-threaded multi-pool ARM Mali GPU miner for GNU/Linux.
+It is based on sgminer-gm 5.5.6 by genesis mining, 
+cgminer by Con Kolivas (ckolivas), which is in turn based on
 cpuminer by Jeff Garzik (jgarzik).
-
-**releases**: https://github.com/sgminer-dev/sgminer/releases
-
-**git tree**: https://github.com/sgminer-dev/sgminer
-
-**bugtracker**: https://github.com/sgminer-dev/sgminer/issues
-
-**irc**: `#sgminer` and `#sgminer-dev` on freenode
-
-**mailing lists**: https://sourceforge.net/p/sgminer/mailman/
 
 License: GPLv3.  See `COPYING` for details.
 
+### Notes
+
+All AMD and Nvidia optimizations have been removed.
+
+It has been tested on the following SBC's:
+* Hard Kernel's Odroid XU4/MC1/HC1/HC2 ARMv7a Mali-T628 GPU
+  More information can be found at this [Hard Kernel forum thread](https://forum.odroid.com/viewtopic.php?f=98&t=29571)
+
+* ARMv8a currently has not been tested. 
+
+## Linux Ubuntu/Debian Building
+
+### Dependencies
+
+Mandatory:
+
+* [curl dev library](http://curl.haxx.se/libcurl/) - `libcurl4-openssl-dev` on Ubuntu/Debian
+* [pkg-config](http://www.freedesktop.org/wiki/Software/pkg-config)
+* [libtool](http://www.gnu.org/software/libtool/)
+* [The ARM Computer Vision and Machine Learning library](https://github.com/ARM-software/ComputeLibrary) for ARM GNU/Linux distributions
+
+Optional:
+
+* curses dev library - `libncurses5-dev` on Ubuntu/Debian
+
+If building from git:
+
+* autoconf
+* automake
+
+sgminer-specific configuration options, ADL is not currently supported on ARM GPUs:
+
+    --disable-adl           Override detection and disable building with adl
+    --disable-adl-checks
+    --without-curses        Do not compile support for curses TUI
+
+#### Odroid XU4 Ubuntu/Debian Example
+    apt-get install automake autoconf pkg-config libcurl4-openssl-dev 
+    libjansson-dev libssl-dev libgmp-dev make g++ git libgmp-dev 
+    libncurses5-dev libtool opencl-headers mali-fbdev
+
+Note: mali-fbdev needed if using Ubuntu minimalist image, 
+      malit628-odroid for debian minimalist image for Odroid XU4.
+      The ARM Computer Vision and Machine Learning library must be downloaded
+      from the ARM github repository.
+
+### Linux build instructions
+
+Then:
+
+    git submodule init
+    git submodule update
+    autoreconf -fi
+    CFLAGS="-Os -Wall -march=native -std=gnu99 -mfpu=neon" LDFLAGS="-L/usr/lib/arm_compute-v18.03-bin-linux/lib/linux-armv7a-neon-cl" ./configure --disable-adl --disable-adl-checks
+    make
+
+In the configuration options summary you should see that OpenCL was found and GPU mining
+was enabled. If it is not then OpenCL is not setup correctly and must be fixed before
+proceeding. Not all SBC's come with OpenCL setup and may not support OpenCL.
+The Hard Kernel Ubuntu images come with OpenCL setup.
+
+If the ARM Computer Vision and Machine Learning library is located in a different path 
+update `LDFLAGS` accordingly.
+
+`-mfpu=neon` is not needed for ARMv8 and should be removed.
+
+To compile a version that can be used accross machines, remove
+`-march=native`.
+
+To compile a debug version, replace `-O2` with `-ggdb`.
+
+Depending on your environment, replace `-std=gnu99` with `-std=c99`.
+
+Systemwide installation is optional. You may run `sgminer` from the build
+directory directly, or `make install` if you wish to install
+`sgminer` to a system location or a location you specified with `--prefix`.
+
+## Basic Usage
+
+To run from a script
+
+    #!/bin/bash
+    export GPU_FORCE_64BIT_PTR=1
+    export GPU_USE_SYNC_OBJECTS=1
+    export GPU_MAX_ALLOC_PERCENT=100
+    export GPU_SINGLE_ALLOC_PERCENT=100
+    export GPU_MAX_HEAP_SIZE=100
+    ./sgminer -k algorithm -o stratum+tcp://pool.na:port -u user.worker -p password -I 4 -w 32 -d 0,1 --thread-concurrency 8192
+
+Notes:
+The intensity(-I 4), work size(-w 32), --thread concurrency must be tuned for each algorithm and GPU type.
+Since the Mali-T628 has 2 device, both are selected(-d 0,1). 
+At this time all other Mali GPUs only have one device.
 
 ## Documentation
 
@@ -35,77 +118,10 @@ Documentation is available in directory `doc`. It is organised by topics:
   procedure;
 * `MINING.md` for how to find the right balance in GPU configuration to mine
   Scrypt-based coins efficiently;
-* `windows-build.txt` for information on how to build on Windows.
 
 Note that **most of the documentation is outdated or incomplete**. If
 you want to contribute, fork this repository, update as needed, and
 submit a pull request.
-
-
-## Building
-
-### Dependencies
-
-Mandatory:
-
-* [curl dev library](http://curl.haxx.se/libcurl/) - `libcurl4-openssl-dev` on Debian
-* [pkg-config](http://www.freedesktop.org/wiki/Software/pkg-config)
-* [libtool](http://www.gnu.org/software/libtool/)
-* [AMD APP SDK](http://developer.amd.com/tools-and-sdks/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/)	- available under various names as a package on different GNU/Linux distributions
-
-Optional:
-
-* curses dev library - `libncurses5-dev` on Debian or `libpdcurses` on WIN32, for text user interface
-* [AMD ADL SDK](http://developer.amd.com/display-library-adl-sdk/) - version 6, required for ATI GPU monitoring & clocking
-
-If building from git:
-
-* autoconf
-* automake
-
-sgminer-specific configuration options:
-
-    --disable-adl           Override detection and disable building with adl
-	--disable-adl-checks
-    --without-curses        Do not compile support for curses TUI
-
-#### Debian Example
-
-    apt-get install libcurl4-openssl-dev pkg-config libtool libncurses5-dev
-AMD APP SDK and AMD ADL SDK must be downloaded from the amd websites.
-
-### *nix build instructions
-
-If needed, place include headers (`*.h` files) from `ADL_SDK_*<VERSION>*.zip` in `sgminer/ADL_SDK`.
-
-Then:
-
-    git submodule init
-    git submodule update
-    autoreconf -i
-    CFLAGS="-O2 -Wall -march=native -std=gnu99" ./configure <options>
-    make
-
-To compile a version that can be used accross machines, remove
-`-march=native`.
-
-To compile a debug version, replace `-O2` with `-ggdb`.
-
-Depending on your environment, replace `-std=gnu99` with `-std=c99`.
-
-Systemwide installation is optional. You may run `sgminer` from the build
-directory directly, or `make install` if you wish to install
-`sgminer` to a system location or a location you specified with `--prefix`.
-
-### Windows build instructions
-
-See `doc/windows-build.txt` for MinGW compilation and cross-compiation,
-`doc/cygwin-build.txt` for building using Cygwin, or use the provided
-`winbuild` Microsoft Visual Studio project (tested on MSVS2010), with
-instructions in `winbuild/README.txt`.
-
-
-## Basic Usage
 
 **WARNING**: documentation below this point has not been updated since the
 fork.

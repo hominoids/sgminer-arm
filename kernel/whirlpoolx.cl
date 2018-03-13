@@ -1,3 +1,5 @@
+#define arm_bfe(src0, offset, width)    ((src0 << (32 - (offset) - width)) >> (32 - width))
+
 #ifndef WHIRLPOOLX_CL
 #define WHIRLPOOLX_CL
 
@@ -94,7 +96,6 @@ __constant static const ulong ROUND_CONSTANTS[10] =
 	uint to fix this.
 */
 
-#pragma OPENCL EXTENSION cl_amd_media_ops2 : enable
 
 /*
 	Note that while the compiler is pretty much clinically brain-dead half the time, it CAN do very basic things reliably.
@@ -106,27 +107,18 @@ __constant static const ulong ROUND_CONSTANTS[10] =
 //#define BYTELO(x, y)		(amd_bfe((uint)(x), (y), 8U))
 //#define BYTEHI(x, y)		(amd_bfe((uint)((x) >> 32), (y) - 32U, 8U))
 
-#define BYTE(x, y)			(amd_bfe((uint)((x) >> ((y >= 32U) ? 32U : 0U)), (y) - (((y) >= 32) ? 32U : 0), 8U))
+#define BYTE(x, y)			(arm_bfe((uint)((x) >> ((y >= 32U) ? 32U : 0U)), (y) - (((y) >= 32) ? 32U : 0), 8U))
 
 /*
 	Macro here to differentiate between the round implementations for Hawaii and Tonga versus all of the earlier cards; I'm most interested
 	in making sure it works well for Tahiti and Pitcairn, though. More on why they're different below.
 */
 
-#if defined(__Hawaii__) || defined(__Tonga__)
-	
-	#define W_ROUND(in, i0, i1, i2, i3, i4, i5, i6, i7)	(T0[BYTE(in.s ## i0, 0U)] ^ T1[BYTE(in.s ## i1, 8U)] ^ T2[BYTE(in.s ## i2, 16U)] ^ T3[BYTE(in.s ## i3, 24U)] ^ \
-															rotate(T0[BYTE(in.s ## i4, 32U)], 32UL) ^ rotate(T0[BYTE(in.s ## i5, 40U)], 40UL) ^ rotate(T0[BYTE(in.s ## i6, 48U)], 48UL) ^ \
-															rotate(T0[BYTE(in.s ## i7, 56U)], 56UL))
-	
-#else
 	
 	#define W_ROUND(in, i0, i1, i2, i3, i4, i5, i6, i7)	(T0[BYTE(in.s ## i0, 0U)] ^ T1[BYTE(in.s ## i1, 8U)] ^ rotate(T0[BYTE(in.s ## i2, 16U)], 16UL) ^ rotate(T0[BYTE(in.s ## i3, 24U)], 24UL) ^ \
 															rotate(T0[BYTE(in.s ## i4, 32U)], 32UL) ^ rotate(T0[BYTE(in.s ## i5, 40U)], 40UL) ^ rotate(T0[BYTE(in.s ## i6, 48U)], 48UL) ^ \
 															rotate(T0[BYTE(in.s ## i7, 56U)], 56UL))
 	
-#endif
-
 /*
 	The kernel parameters probably look odd, and the reason for that is likely another thing that will make you feel
 	like you should have thought of it before now - the first execution of Whirlpool is actually constant! It does
@@ -173,12 +165,6 @@ __kernel void search(const ulong8 midstate, const ulong input0, const ulong inpu
 	*/
 		
 	
-	#if defined(__Hawaii__) || defined(__Tonga__)
-		
-		__local ulong T2[256], T3[256];
-		
-	#endif
-	
 	#if WORKSIZE == 256
 		
 		__private uint lid = get_local_id(0);
@@ -186,26 +172,12 @@ __kernel void search(const ulong8 midstate, const ulong input0, const ulong inpu
 		T0[lid] = T0_C[lid];
 		T1[lid] = rotate(T0_C[lid], 8UL);
 		
-		#if defined(__Hawaii__) || defined(__Tonga__)
-			
-			T2[lid] = rotate(T0_C[lid], 16UL);
-			T3[lid] = rotate(T0_C[lid], 24UL);
-			
-		#endif
-		
 	#else
 		
 		for(uint lid = get_local_id(0); lid < 256; lid += WORKSIZE)
 		{
 			T0[lid] = T0_C[lid];
 			T1[lid] = rotate(T0_C[lid], 8UL);
-			
-			#if defined(__Hawaii__) || defined(__Tonga__)
-				
-				T2[lid] = rotate(T0_C[lid], 16UL);
-				T3[lid] = rotate(T0_C[lid], 24UL);
-				
-			#endif			
 		}
 		
 	#endif

@@ -1,10 +1,8 @@
 #define MAX_OUTPUTS 0xFFu
 #define barrier(x) mem_fence(x)
-#define PLATFORM 2
+#define PLATFORM 0
 
 #define OPENCL_PLATFORM_UNKNOWN 0
-#define OPENCL_PLATFORM_NVIDIA  1
-#define OPENCL_PLATFORM_AMD		2
 
 #define ACCESSES 64
 #define THREADS_PER_HASH (128 / 16)
@@ -39,33 +37,6 @@ __constant uint2 const Keccak_f1600_RC[24] = {
 	(uint2)(0x80008008, 0x80000000),
 };
 
-#if PLATFORM == OPENCL_PLATFORM_NVIDIA && COMPUTE >= 35
-static uint2 ROL2(const uint2 a, const int offset) {
-	uint2 result;
-	if (offset >= 32) {
-		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(a.x), "r"(a.y), "r"(offset));
-		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(a.y), "r"(a.x), "r"(offset));
-	}
-	else {
-		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(a.y), "r"(a.x), "r"(offset));
-		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(a.x), "r"(a.y), "r"(offset));
-	}
-	return result;
-}
-#elif PLATFORM == OPENCL_PLATFORM_AMD
-#pragma OPENCL EXTENSION cl_amd_media_ops : enable
-static uint2 ROL2(const uint2 vv, const int r)
-{
-	if (r <= 32)
-	{
-		return amd_bitalign((vv).xy, (vv).yx, 32 - r);
-	}
-	else
-	{
-		return amd_bitalign((vv).yx, (vv).xy, 64 - r);
-	}
-}
-#else
 static uint2 ROL2(const uint2 v, const int n)
 {
 	uint2 result;
@@ -81,7 +52,6 @@ static uint2 ROL2(const uint2 v, const int n)
 	}
 	return result;
 }
-#endif
 
 static void chi(uint2 * a, const uint n, const uint2 * t)
 {
@@ -242,9 +212,7 @@ typedef union {
 	uint  uints[16];
 } compute_hash_share;
 
-#if PLATFORM != OPENCL_PLATFORM_NVIDIA // use maxrregs on nv
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-#endif
 __kernel void search(
 	__global volatile uint* restrict g_output,
 	__constant hash32_t const* g_header,

@@ -602,18 +602,6 @@ static void neoscrypt_pbkdf2_blake256(const uint8_t *password, size_t password_l
 
 /* NeoScrypt */
 
-#if defined(ASM)
-
-extern void neoscrypt_salsa(uint *X, uint rounds);
-extern void neoscrypt_salsa_tangle(uint *X, uint count);
-extern void neoscrypt_chacha(uint *X, uint rounds);
-
-extern void neoscrypt_blkcpy(void *dstp, const void *srcp, uint len);
-extern void neoscrypt_blkswp(void *blkAp, void *blkBp, uint len);
-extern void neoscrypt_blkxor(void *dstp, const void *srcp, uint len);
-
-#else
-
 /* Salsa20, rounds must be a multiple of 2 */
 static void neoscrypt_salsa(uint *X, uint rounds) {
     uint x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, t;
@@ -737,7 +725,6 @@ static void neoscrypt_blkxor(void *dstp, const void *srcp, uint len) {
     }
 }
 
-#endif
 
 /* 32-bit / 64-bit optimised memcpy() */
 static void neoscrypt_copy(void *dstp, const void *srcp, uint len) {
@@ -1235,10 +1222,6 @@ void neoscrypt(const uchar *password, uchar *output, uint profile) {
         }
     }
 
-#if (ASM)
-    /* Must be called before and after SSE2 Salsa */
-    neoscrypt_salsa_tangle(&X[0], r * 2);
-#endif
 
     /* X = SMix(X) */
     for(i = 0; i < N; i++) {
@@ -1256,9 +1239,6 @@ void neoscrypt(const uchar *password, uchar *output, uint profile) {
         neoscrypt_blkmix(&X[0], &Y[0], r, mixmode);
     }
 
-#if (ASM)
-    neoscrypt_salsa_tangle(&X[0], r * 2);
-#endif
 
     if(dblmix)
       /* blkxor(X, Z) */

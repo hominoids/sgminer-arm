@@ -21,9 +21,6 @@
 #include "equihash-param.h"
 
 #pragma OPENCL EXTENSION cl_khr_global_int32_base_atomics : enable
-#ifdef AMD
-#pragma OPENCL EXTENSION cl_amd_vec3 : enable
-#endif
 
 
 
@@ -54,10 +51,6 @@ typedef union {
     uint4 ui4[2];
     uint2 ui2[4];
     uint  ui[8];
-#ifdef AMD
-    ulong3 ul3;
-    uint3 ui3[2];
-#endif
 } slot_t;
 
 typedef __global slot_t *global_pointer_to_slot_t;
@@ -246,15 +239,9 @@ void kernel_round0(__constant ulong *blake_state, __global char *ht,
     __global uint *rowCounters, __global uint *debug)
 {
     uint                tid = get_global_id(0);
-#if defined(AMD) && !defined(AMD_LEGACY)
-    volatile ulong      v[16];
-    uint xi0, xi1, xi2, xi3, xi4, xi5, xi6;
-    slot_t slot;
-#else
     ulong               v[16];
     uint xi0, xi1, xi2, xi3, xi4, xi5, xi6;
     slot_t slot;
-#endif
     ulong               h[7];
     uint                inputs_per_thread = (NR_INPUTS + get_global_size(0) - 1) / get_global_size(0);
     uint                dropped = 0;
@@ -288,13 +275,7 @@ void kernel_round0(__constant ulong *blake_state, __global char *ht,
             // last block
             v[14] ^= (ulong)-1;
 
-#if defined(AMD) && !defined(AMD_LEGACY)
-#pragma unroll 1
             for (uint blake_round = 1; blake_round <= 9; ++blake_round) {
-#else
-#pragma unroll 9
-            for (uint blake_round = 1; blake_round <= 9; ++blake_round) {
-#endif
                 mix(v[0], v[4], v[8], v[12], 0, (blake_round == 1) ? word1 : 0);
                 mix(v[1], v[5], v[9], v[13], (blake_round == 7) ? word1 : 0, (blake_round == 4) ? word1 : 0);
                 mix(v[2], v[6], v[10], v[14], 0, (blake_round == 8) ? word1 : 0);
@@ -628,24 +609,9 @@ if (assigned_row_index >= NR_ROWS)
         for (i = get_local_id(0); i < nr_slots; i += get_local_size(0)) {
             uint slot_index = i;
             uint slot_cache_index = i;
-#ifdef NVIDIA
-            uint2 slot_data0, slot_data1, slot_data2;
-            if (UINTS_IN_XI(round - 1) >= 1) slot_data0 = *((__global uint2 *)get_slot_ptr(ht_src, round - 1, assigned_row_index, slot_cache_index) + 0);
-            if (UINTS_IN_XI(round - 1) >= 3) slot_data1 = *((__global uint2 *)get_slot_ptr(ht_src, round - 1, assigned_row_index, slot_cache_index) + 1);
-            if (UINTS_IN_XI(round - 1) >= 5) slot_data2 = *((__global uint2 *)get_slot_ptr(ht_src, round - 1, assigned_row_index, slot_cache_index) + 2);
-
-            if (UINTS_IN_XI(round - 1) >= 1) slot_cache[0 * NR_SLOTS + slot_cache_index] = slot_data0.s0;
-            if (UINTS_IN_XI(round - 1) >= 2) slot_cache[1 * NR_SLOTS + slot_cache_index] = slot_data0.s1;
-            if (UINTS_IN_XI(round - 1) >= 3) slot_cache[2 * NR_SLOTS + slot_cache_index] = slot_data1.s0;
-            if (UINTS_IN_XI(round - 1) >= 4) slot_cache[3 * NR_SLOTS + slot_cache_index] = slot_data1.s1;
-            if (UINTS_IN_XI(round - 1) >= 5) slot_cache[4 * NR_SLOTS + slot_cache_index] = slot_data2.s0;
-            if (UINTS_IN_XI(round - 1) >= 6) slot_cache[5 * NR_SLOTS + slot_cache_index] = slot_data2.s1;
-            uint xi0 = slot_data0.s0;
-#else
             for (j = 0; j < UINTS_IN_XI(round - 1); ++j)
                 slot_cache[j * NR_SLOTS + slot_cache_index] = *((__global uint *)get_xi_ptr(ht_src, round - 1, assigned_row_index, slot_index) + j);
             uint xi0 = slot_cache[0 * NR_SLOTS + slot_cache_index];
-#endif
             uint bin_to_use =
                   ((xi0 & BIN_MASK(round - 1)) >> BIN_MASK_OFFSET(round - 1))
                 | ((xi0 & BIN_MASK2(round - 1)) >> BIN_MASK2_OFFSET(round - 1));

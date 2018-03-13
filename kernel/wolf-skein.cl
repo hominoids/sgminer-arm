@@ -1,3 +1,5 @@
+#define arm_bitalign(src0, src1, src2)  ((((((long)src0) << 32) | (long)src1) >> (src2 & 31)))
+
 #ifndef WOLF_SKEIN_CL
 #define WOLF_SKEIN_CL
 
@@ -30,8 +32,8 @@ static const __constant ulong SKEIN512_256_IV[8] =
 
 ulong SKEIN_ROT(const uint2 x, const uint y)
 {
-	if(y < 32) return(as_ulong(amd_bitalign(x, x.s10, 32 - y)));
-	else return(as_ulong(amd_bitalign(x.s10, x, 32 - (y - 32))));
+	if(y < 32) return(as_ulong(arm_bitalign(x, x.s10, 32 - y)));
+	else return(as_ulong(arm_bitalign(x.s10, x, 32 - (y - 32))));
 }
 
 void SkeinMix8(ulong4 *pv0, ulong4 *pv1, const uint rc0, const uint rc1, const uint rc2, const uint rc3)
