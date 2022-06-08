@@ -65,8 +65,10 @@ ln -s /system/vendor/lib64/egl/libmali.so $PREFIX/lib/libOpenCL.so
 # compile the thing:
 
 ```
-git clone https://github.com/Saikatsaha1996/sgminer-android
-cd sgminer-android
+git clone https://github.com/Saikatsaha1996/sgminer-arm
+cd sgminer-arm 
+git submodule init 
+git submodule update 
 autoreconf -fi
 
 CFLAGS="-Os -Wall -march=armv8-a+simd+crypto+crc -mtune=cortex-a77 -std=gnu99" CPPFLAGS="-Os -Wall -march=armv8-a+simd+crypto+crc -mtune=cortex-a77 -std=gnu99" LDFLAGS="-L$PREFIX/lib -lbthread -lpthread -lOpenCL" ./configure --disable-adl --disable-adl-checks --disable-git-version 
