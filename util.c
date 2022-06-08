@@ -9,7 +9,7 @@
  */
 
 #include "config.h"
-
+#include <bthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
