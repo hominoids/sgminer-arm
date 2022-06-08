@@ -1,8 +1,10 @@
 ## Credits 
-1)
-2)
-3)
+1) forked from `https://github.com/hominoids/sgminer-arm` 
+2) for Android Port i got help from `https://github.com/Pyogenics` 
+3) 
 4)
+5)
+6)
 #### I will mention credit when projects complete, project still under development.
 #### I want help for kernel optimization for Adreno && ARM-Mali GPU 
 #### In this project ALL kernel optimise for AMD 
