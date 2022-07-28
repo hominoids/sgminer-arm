@@ -64,7 +64,9 @@ ln -s /system/vendor/lib64/egl/libmali.so $PREFIX/lib/libOpenCL.so
 #### edit this line, after add save && exit
 ```
 nano $PREFIX/include/bthread.h
+```
 #### add this line 
+```
 #include <pthread.h>
 ```
 
