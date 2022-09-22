@@ -81,7 +81,7 @@ git submodule init
 git submodule update 
 autoreconf -fi
 
-CFLAGS="-Os -Wall -march=armv8-a+simd+crypto+crc -mtune=cortex-a77 -std=gnu99" CPPFLAGS="-Os -Wall -march=armv8-a+simd+crypto+crc -mtune=cortex-a77 -std=gnu99" LDFLAGS="-L$PREFIX/lib -lbthread -lpthread -lOpenCL" ./configure --disable-adl --disable-adl-checks --disable-git-version 
+CFLAGS="-O3 -Wall -march=armv8-a+simd+crypto+crc -mtune=cortex-a77 -std=gnu99 -fcommon" CPPFLAGS="-O3 -Wall -march=armv8-a+simd+crypto+crc -mtune=cortex-a77 -std=gnu99 -fcommon" LDFLAGS="-L$PREFIX/lib -lbthread -lpthread -lOpenCL -fcommon" ./configure --disable-adl --disable-adl-checks --disable-git-version 
 ```
 
 now you can see in your screen `OPENCL FOUND && GPU MINING SUPPORT ENABLED`
