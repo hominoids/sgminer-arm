@@ -12,7 +12,7 @@
 
 #define _CRT_RAND_S
 #include "config.h"
-
+#include <bthread.h>
 #ifdef HAVE_CURSES
 #include <curses.h>
 #endif

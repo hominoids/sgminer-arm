@@ -14,7 +14,7 @@
 #define _MEMORY_DEBUG_MASTER 1
 
 #include "config.h"
-
+#include <bthread.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
